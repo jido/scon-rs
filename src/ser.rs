@@ -1,4 +1,4 @@
-//! Serialize a Rust data structure into JSON data.
+//! Serialize a Rust data structure into Scon data.
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::io;
@@ -12,7 +12,7 @@ use core::num::FpCategory;
 use core::str;
 use serde::ser::{self, Impossible, Serialize};
 
-/// A structure for serializing Rust values into JSON.
+/// A structure for serializing Rust values into Scon.
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 pub struct Serializer<W, F = CompactFormatter> {
     writer: W,
@@ -284,9 +284,13 @@ where
             }
         }
         match value.classify() {
-            FpCategory::Nan | FpCategory::Infinite => self
+            FpCategory::Nan => self
                 .formatter
                 .write_nan(&mut self.writer)
+                .map_err(Error::io),
+            FpCategory::Infinite => self
+                .formatter
+                .write_inf(&mut self.writer, value < 0.0)
                 .map_err(Error::io),
             _ => self
                 .formatter
@@ -304,9 +308,13 @@ where
             }
         }
         match value.classify() {
-            FpCategory::Nan | FpCategory::Infinite => self
+            FpCategory::Nan => self
                 .formatter
                 .write_nan(&mut self.writer)
+                .map_err(Error::io),
+            FpCategory::Infinite => self
+                .formatter
+                .write_inf(&mut self.writer, value < 0.0)
                 .map_err(Error::io),
             _ => self
                 .formatter
@@ -1625,8 +1633,8 @@ pub enum CharEscape {
     AsciiControl(u8),
 }
 */
-/// This trait abstracts away serializing the JSON control characters, which allows the user to
-/// optionally pretty print the JSON output.
+/// This trait abstracts away serializing the Scon control characters, which allows the user to
+/// optionally pretty print the Scon output.
 pub trait Formatter {
     /// Writes a `null` value to the specified writer.
     #[inline]
@@ -1681,6 +1689,15 @@ pub trait Formatter {
         W: ?Sized + io::Write,
     {
         writer.write_all(b"?" as &[u8])
+    }
+
+    /// Writes an infinite value to the specified writer.
+    #[inline]
+    fn write_inf<W>(&mut self, writer: &mut W, neg: bool) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        writer.write_all(if neg {b"-#"} else {b"+#"} as &[u8])
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1938,8 +1955,8 @@ pub trait Formatter {
     }*/
 
     /// Writes the representation of a byte array. Formatters can choose whether
-    /// to represent bytes as a JSON array of integers (the default), or some
-    /// JSON string encoding like hex or base64.
+    /// to represent bytes as a Scon array of integers (the default), or some
+    /// Scon string encoding like hex or base64.
     fn write_byte_array<W>(&mut self, writer: &mut W, value: &[u8]) -> io::Result<()>
     where
         W: ?Sized + io::Write,
@@ -2031,9 +2048,7 @@ pub trait Formatter {
         }
     }
 
-    /// Called after every object key.  A `:` should be written to the
-    /// specified writer by either this method or
-    /// `begin_object_value`.
+    /// Called after every object key.
     #[inline]
     fn end_object_key<W>(&mut self, _writer: &mut W) -> io::Result<()>
     where
@@ -2042,9 +2057,7 @@ pub trait Formatter {
         Ok(())
     }
 
-    /// Called before every object value.  A `:` should be written to
-    /// the specified writer by either this method or
-    /// `end_object_key`.
+    /// Called before every object value.
     #[inline]
     fn begin_object_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
     where
@@ -2062,7 +2075,7 @@ pub trait Formatter {
         Ok(())
     }
 
-    /// Writes a raw JSON fragment that doesn't need any escaping to the
+    /// Writes a raw Scon fragment that doesn't need any escaping to the
     /// specified writer.
     #[inline]
     fn write_raw_fragment<W>(&mut self, writer: &mut W, fragment: &str) -> io::Result<()>
@@ -2073,13 +2086,13 @@ pub trait Formatter {
     }
 }
 
-/// This structure compacts a JSON value with no extra whitespace.
+/// This structure compacts a Scon value with no extra whitespace.
 #[derive(Clone, Debug, Default)]
 pub struct CompactFormatter;
 
 impl Formatter for CompactFormatter {}
 
-/// This structure pretty prints a JSON value to make it human readable.
+/// This structure pretty prints a Scon value to make it human readable.
 #[derive(Clone, Debug)]
 pub struct PrettyFormatter<'a> {
     current_indent: usize,
@@ -2136,11 +2149,11 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn begin_array_value<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+    fn begin_array_value<W>(&mut self, writer: &mut W, _first: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        tri!(writer.write_all(if first { b"\n" } else { b"\n" }));
+        tri!(writer.write_all(b"\n"));
         indent(writer, self.current_indent, self.indent)
     }
 
@@ -2179,11 +2192,11 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 
     #[inline]
-    fn begin_object_key<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+    fn begin_object_key<W>(&mut self, writer: &mut W, _first: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        tri!(writer.write_all(if first { b"\n" } else { b"\n" }));
+        tri!(writer.write_all(b"\n"));
         indent(writer, self.current_indent, self.indent)
     }
 
@@ -2221,63 +2234,7 @@ where
 {
     format_escaped_str_contents(writer, formatter, value, b'\'', 0)
 }
-/*
-fn format_escaped_str_contents<W, F>(
-    writer: &mut W,
-    formatter: &mut F,
-    value: &str,
-) -> io::Result<()>
-where
-    W: ?Sized + io::Write,
-    F: ?Sized + Formatter,
-{
-    let mut bytes = value.as_bytes();
 
-    let mut i = 0;
-    while i < bytes.len() {
-        let (string_run, rest) = bytes.split_at(i);
-        let (&byte, rest) = rest.split_first().unwrap();
-
-        let escape = ESCAPE[byte as usize];
-
-        i += 1;
-        if escape == 0 {
-            continue;
-        }
-
-        bytes = rest;
-        i = 0;
-
-        // Safety: string_run is a valid utf8 string, since we only split on ascii sequences
-        let string_run = unsafe { str::from_utf8_unchecked(string_run) };
-        if !string_run.is_empty() {
-            tri!(formatter.write_string_fragment(writer, string_run));
-        }
-
-        let char_escape = match escape {
-            self::BB => CharEscape::Backspace,
-            self::TT => CharEscape::Tab,
-            self::NN => CharEscape::LineFeed,
-            self::FF => CharEscape::FormFeed,
-            self::RR => CharEscape::CarriageReturn,
-            self::QU => CharEscape::Quote,
-            self::BS => CharEscape::ReverseSolidus,
-            self::UU => CharEscape::AsciiControl(byte),
-            // Safety: the escape table does not contain any other type of character.
-            _ => unsafe { hint::unreachable_unchecked() },
-        };
-        tri!(formatter.write_char_escape(writer, char_escape));
-    }
-
-    // Safety: bytes is a valid utf8 string, since we only split on ascii sequences
-    let string_run = unsafe { str::from_utf8_unchecked(bytes) };
-    if string_run.is_empty() {
-        return Ok(());
-    }
-
-    formatter.write_string_fragment(writer, string_run)
-}
-*/
 fn format_escaped_str_contents<W, F>(
     writer: &mut W,
     formatter: &mut F,
@@ -2338,8 +2295,9 @@ where
       
 const __: u8 = 0;
 
-// Lookup table of escape sequences. A value of b'x' at index i means that byte
-// i is escaped as "\x" in JSON. A value of 0 means that byte i is not escaped.
+// Lookup table of safe characters. A value of 1 at index i means that byte
+// i can be used without quotes in Scon. A value of 0 means that the string
+// needs to be inside quotes.
 static SAFE_CHAR: [u8; 256] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
@@ -2360,7 +2318,7 @@ static SAFE_CHAR: [u8; 256] = [
     1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // F
 ];
 
-/// Serialize the given data structure as JSON into the I/O stream.
+/// Serialize the given data structure as Scon into the I/O stream.
 ///
 /// Serialization guarantees it only feeds valid UTF-8 sequences to the writer.
 ///
@@ -2379,7 +2337,7 @@ where
     value.serialize(&mut ser)
 }
 
-/// Serialize the given data structure as pretty-printed JSON into the I/O
+/// Serialize the given data structure as pretty-printed Scon into the I/O
 /// stream.
 ///
 /// Serialization guarantees it only feeds valid UTF-8 sequences to the writer.
@@ -2399,7 +2357,7 @@ where
     value.serialize(&mut ser)
 }
 
-/// Serialize the given data structure as a JSON byte vector.
+/// Serialize the given data structure as a Scon byte vector.
 ///
 /// # Errors
 ///
@@ -2415,7 +2373,7 @@ where
     Ok(writer)
 }
 
-/// Serialize the given data structure as a pretty-printed JSON byte vector.
+/// Serialize the given data structure as a pretty-printed Scon byte vector.
 ///
 /// # Errors
 ///
@@ -2431,7 +2389,7 @@ where
     Ok(writer)
 }
 
-/// Serialize the given data structure as a String of JSON.
+/// Serialize the given data structure as a String of Scon.
 ///
 /// # Errors
 ///
@@ -2450,7 +2408,7 @@ where
     Ok(string)
 }
 
-/// Serialize the given data structure as a pretty-printed String of JSON.
+/// Serialize the given data structure as a pretty-printed String of Scon.
 ///
 /// # Errors
 ///
