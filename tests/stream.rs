@@ -1,6 +1,6 @@
 #![allow(clippy::assertions_on_result_states)]
 
-use serde_scon::{json, Deserializer, Value};
+use serde_scon::{scon, Deserializer, Value};
 
 // Rustfmt issue https://github.com/rust-lang-nursery/rustfmt/issues/2740
 #[rustfmt::skip]
@@ -29,7 +29,7 @@ macro_rules! test_stream {
 }
 
 #[test]
-fn test_json_stream_newlines() {
+fn test_scon_stream_newlines() {
     let data = "{\"x\":39} {\"x\":40}{\"x\":41}\n{\"x\":42}";
 
     test_stream!(data, Value, |stream| {
@@ -51,7 +51,7 @@ fn test_json_stream_newlines() {
 }
 
 #[test]
-fn test_json_stream_trailing_whitespaces() {
+fn test_scon_stream_trailing_whitespaces() {
     let data = "{\"x\":42} \t\n";
 
     test_stream!(data, Value, |stream| {
@@ -64,7 +64,7 @@ fn test_json_stream_trailing_whitespaces() {
 }
 
 #[test]
-fn test_json_stream_truncated() {
+fn test_scon_stream_truncated() {
     let data = "{\"x\":40}\n{\"x\":";
 
     test_stream!(data, Value, |stream| {
@@ -77,7 +77,7 @@ fn test_json_stream_truncated() {
 }
 
 #[test]
-fn test_json_stream_truncated_decimal() {
+fn test_scon_stream_truncated_decimal() {
     let data = "{\"x\":4.";
 
     test_stream!(data, Value, |stream| {
@@ -87,7 +87,7 @@ fn test_json_stream_truncated_decimal() {
 }
 
 #[test]
-fn test_json_stream_truncated_negative() {
+fn test_scon_stream_truncated_negative() {
     let data = "{\"x\":-";
 
     test_stream!(data, Value, |stream| {
@@ -97,7 +97,7 @@ fn test_json_stream_truncated_negative() {
 }
 
 #[test]
-fn test_json_stream_truncated_exponent() {
+fn test_scon_stream_truncated_exponent() {
     let data = "{\"x\":4e";
 
     test_stream!(data, Value, |stream| {
@@ -107,7 +107,7 @@ fn test_json_stream_truncated_exponent() {
 }
 
 #[test]
-fn test_json_stream_empty() {
+fn test_scon_stream_empty() {
     let data = "";
 
     test_stream!(data, Value, |stream| {
@@ -117,23 +117,23 @@ fn test_json_stream_empty() {
 }
 
 #[test]
-fn test_json_stream_primitive() {
+fn test_scon_stream_primitive() {
     let data = "{} true{}1[]\nfalse\"hey\"2 ";
 
     test_stream!(data, Value, |stream| {
-        assert_eq!(stream.next().unwrap().unwrap(), json!({}));
+        assert_eq!(stream.next().unwrap().unwrap(), scon!({}));
         assert_eq!(stream.byte_offset(), 2);
 
         assert_eq!(stream.next().unwrap().unwrap(), true);
         assert_eq!(stream.byte_offset(), 7);
 
-        assert_eq!(stream.next().unwrap().unwrap(), json!({}));
+        assert_eq!(stream.next().unwrap().unwrap(), scon!({}));
         assert_eq!(stream.byte_offset(), 9);
 
         assert_eq!(stream.next().unwrap().unwrap(), 1);
         assert_eq!(stream.byte_offset(), 10);
 
-        assert_eq!(stream.next().unwrap().unwrap(), json!([]));
+        assert_eq!(stream.next().unwrap().unwrap(), scon!([]));
         assert_eq!(stream.byte_offset(), 12);
 
         assert_eq!(stream.next().unwrap().unwrap(), false);
@@ -151,7 +151,7 @@ fn test_json_stream_primitive() {
 }
 
 #[test]
-fn test_json_stream_invalid_literal() {
+fn test_scon_stream_invalid_literal() {
     let data = "truefalse";
 
     test_stream!(data, Value, |stream| {
@@ -161,7 +161,7 @@ fn test_json_stream_invalid_literal() {
 }
 
 #[test]
-fn test_json_stream_invalid_number() {
+fn test_scon_stream_invalid_number() {
     let data = "1true";
 
     test_stream!(data, Value, |stream| {

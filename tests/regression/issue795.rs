@@ -3,7 +3,7 @@
 use serde::de::{
     Deserialize, Deserializer, EnumAccess, IgnoredAny, MapAccess, VariantAccess, Visitor,
 };
-use serde_scon::json;
+use serde_scon::scon;
 use std::fmt;
 
 #[derive(Debug)]
@@ -57,6 +57,6 @@ fn test() {
     let s = r#" {"Variant":{"x":0,"y":0}} "#;
     assert!(serde_scon::from_str::<Enum>(s).is_err());
 
-    let j = json!({"Variant":{"x":0,"y":0}});
+    let j = scon!({"Variant":{"x":0,"y":0}});
     assert!(serde_scon::from_value::<Enum>(j).is_err());
 }

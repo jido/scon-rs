@@ -35,7 +35,7 @@ use serde_bytes::{ByteBuf, Bytes};
 #[cfg(feature = "raw_value")]
 use serde_scon::value::RawValue;
 use serde_scon::{
-    from_reader, from_slice, from_str, from_value, json, to_string, to_string_pretty, to_value,
+    from_reader, from_slice, from_str, from_value, scon, to_string, to_string_pretty, to_value,
     to_vec, Deserializer, Number, Value,
 };
 use std::collections::BTreeMap;
@@ -257,16 +257,19 @@ fn test_write_list() {
         (vec![true, false], pretty_str!([true, false])),
     ]);
 
-    let long_test_list = json!([false, null, ["foo\nbar", 3.5]]);
+    let long_test_list = scon!([false, null, ["foo
+bar", 3.5]]);
 
     test_encode_ok(&[(
         long_test_list.clone(),
-        json_str!([false, null, ["foo\nbar", 3.5]]),
+        scon_str!([false, null, ["foo
+bar", 3.5]]),
     )]);
 
     test_pretty_encode_ok(&[(
         long_test_list,
-        pretty_str!([false, null, ["foo\nbar", 3.5]]),
+        pretty_str!([false, null, ["foo
+bar", 3.5]]),
     )]);
 }
 
@@ -341,9 +344,9 @@ fn test_write_object() {
                 "c".to_owned() => treemap![],
             ],
             pretty_str!({
-                "a": {},
-                "b": {},
-                "c": {}
+                a:{},
+                b:{},
+                c:{},
             }),
         ),
         (
@@ -390,11 +393,11 @@ fn test_write_object() {
                             1,
                             2,
                             3,
-                        ]
+                        ],
                     },
                     b:{},
                     c:{},
-                }
+                },
                 c:{},
             }),
         ),
@@ -417,11 +420,11 @@ fn test_write_object() {
                              1,
                              2,
                              3,
-                        ]
+                        ],
                     },
                     b:{},
                     c:{},
-                }
+                },
             }),
         ),
     ]);
@@ -446,7 +449,7 @@ fn test_write_object() {
         ),
     ]);
 
-    let complex_obj = json!({
+    let complex_obj = scon!({
         "b": [
             {"c": "\x0c\x1f\r"},
             {"d": ""}
@@ -455,28 +458,28 @@ fn test_write_object() {
 
     test_encode_ok(&[(
         complex_obj.clone(),
-        json_str!({
-            "b": [
+        scon_str!({
+            b:[
                 {
-                    "c": (r#""\f\u001f\r""#)
+                    c:("\"\x0c\x1f\r\""),
                 },
                 {
-                    "d": ""
-                }
-            ]
+                    d:"",
+                },
+            ],
         }),
     )]);
 
     test_pretty_encode_ok(&[(
         complex_obj,
         pretty_str!({
-            b: [{
-                    c: (r#""\f\u001f\r""#)
+            b:[{
+                    c:("\"\x0c\x1f\r\""),
                 },
                 {
-                    d: ""
-                }
-            ]
+                    d:"",
+                },
+            ],
         }),
     )]);
 }
@@ -487,9 +490,9 @@ fn test_write_tuple() {
 
     test_pretty_encode_ok(&[((5,), pretty_str!([5]))]);
 
-    test_encode_ok(&[((5, (6, "abc")), "[5,[6,\"abc\"]]")]);
+    test_encode_ok(&[((5, (6, "abc")), "[5,[6,`abc]]")]);
 
-    test_pretty_encode_ok(&[((5, (6, "abc")), pretty_str!([5, [6, "abc"]]))]);
+    test_pretty_encode_ok(&[((5, (6, "abc")), &pretty_str!([5, [6, 'abc]]).replace("'", "`"))]);
 }
 
 #[test]
@@ -525,35 +528,35 @@ fn test_write_enum() {
         (Animal::Dog, "`Dog"),
         (
             Animal::Frog("Henry".to_owned(), vec![]),
-            pretty_str!({
-                "Frog": [
-                    "Henry",
-                    []
-                ]
-            }),
+            &pretty_str!({
+                Frog:[
+                    'Henry,
+                    [],
+                ],
+            }).replace("'", "`"),
         ),
         (
             Animal::Frog("Henry".to_owned(), vec![349]),
-            pretty_str!({
-                "Frog": [
-                    "Henry",
+            &pretty_str!({
+                Frog:[
+                    'Henry,
                     [
-                        349
-                    ]
-                ]
-            }),
+                        349,
+                    ],
+                ],
+            }).replace("'", "`"),
         ),
         (
             Animal::Frog("Henry".to_owned(), vec![349, 102]),
-            pretty_str!({
-                "Frog": [
-                    "Henry",
+            &pretty_str!({
+                Frog:[
+                    'Henry,
                     [
                       349,
-                      102
-                    ]
-                ]
-            }),
+                      102,
+                    ],
+                ],
+            }).replace("'", "`"),
         ),
     ]);
 }
@@ -571,7 +574,7 @@ fn test_write_option() {
 
     test_pretty_encode_ok(&[
         (None, "/"),
-        (Some(vec!["foo", "bar"]), pretty_str!(["foo", "bar"])),
+        (Some(vec!["foo", "bar"]), &pretty_str!(['foo, 'bar]).replace("'", "`")),
     ]);
 }
 
@@ -611,20 +614,20 @@ where
         assert_eq!(v, value.clone());
 
         // Make sure we can deserialize into a `Value`.
-        let json_value: Value = from_str(s).unwrap();
-        assert_eq!(json_value, to_value(&value).unwrap());
+        let scon_value: Value = from_str(s).unwrap();
+        assert_eq!(scon_value, to_value(&value).unwrap());
 
         // Make sure we can deserialize from a `&Value`.
-        let v = T::deserialize(&json_value).unwrap();
+        let v = T::deserialize(&scon_value).unwrap();
         assert_eq!(v, value);
 
         // Make sure we can deserialize from a `Value`.
-        let v: T = from_value(json_value.clone()).unwrap();
+        let v: T = from_value(scon_value.clone()).unwrap();
         assert_eq!(v, value);
 
         // Make sure we can round trip back to `Value`.
-        let json_value2: Value = from_value(json_value.clone()).unwrap();
-        assert_eq!(json_value2, json_value);
+        let scon_value2: Value = from_value(scon_value.clone()).unwrap();
+        assert_eq!(scon_value2, scon_value);
 
         // Make sure we can fully ignore.
         let twoline = s.to_owned() + "\n3735928559";
@@ -634,7 +637,7 @@ where
 
         // Make sure every prefix is an EOF error, except that a prefix of a
         // number may be a valid number.
-        if !json_value.is_number() {
+        if !scon_value.is_number() {
             for (i, _) in s.trim_end().char_indices() {
                 assert!(from_str::<Value>(&s[..i]).unwrap_err().is_eof());
                 assert!(from_str::<IgnoredAny>(&s[..i]).unwrap_err().is_eof());
@@ -997,8 +1000,8 @@ fn test_roundtrip_f64() {
         -1.6727517818542075e58,
         3.9287532173373315e299,
     ] {
-        let json = serde_scon::to_string(&float).unwrap();
-        let output: f64 = serde_scon::from_str(&json).unwrap();
+        let scon = serde_scon::to_string(&float).unwrap();
+        let output: f64 = serde_scon::from_str(&scon).unwrap();
         assert_eq!(float, output);
     }
 }
@@ -1008,14 +1011,14 @@ fn test_roundtrip_f32() {
     // This number has 1 ULP error if parsed via f64 and converted to f32.
     // https://github.com/serde-rs/json/pull/671#issuecomment-628534468
     let float = 7.038531e-26;
-    let json = serde_scon::to_string(&float).unwrap();
-    let output: f32 = serde_scon::from_str(&json).unwrap();
+    let scon = serde_scon::to_string(&float).unwrap();
+    let output: f32 = serde_scon::from_str(&scon).unwrap();
     assert_eq!(float, output);
 }
 
 #[test]
 fn test_serialize_char() {
-    let value = json!(
+    let value = scon!(
         ({
             let mut map = BTreeMap::new();
             map.insert('c', ());
@@ -1314,7 +1317,7 @@ fn test_parse_struct() {
         }
     );
 
-    let j = json!([null, 2, []]);
+    let j = scon!([null, 2, []]);
     Inner::deserialize(&j).unwrap();
     Inner::deserialize(j).unwrap();
 }
@@ -1454,10 +1457,10 @@ fn test_missing_option_field() {
     let value: Foo = from_str("{x 5}").unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 
-    let value: Foo = from_value(json!({})).unwrap();
+    let value: Foo = from_value(scon!({})).unwrap();
     assert_eq!(value, Foo { x: None });
 
-    let value: Foo = from_value(json!({"x": 5})).unwrap();
+    let value: Foo = from_value(scon!({"x": 5})).unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 }
 
@@ -1485,10 +1488,10 @@ fn test_missing_renamed_field() {
     let value: Foo = from_str("{y 5}").unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 
-    let value: Foo = from_value(json!({})).unwrap();
+    let value: Foo = from_value(scon!({})).unwrap();
     assert_eq!(value, Foo { x: None });
 
-    let value: Foo = from_value(json!({"y": 5})).unwrap();
+    let value: Foo = from_value(scon!({"y": 5})).unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 }
 
@@ -1656,8 +1659,8 @@ fn test_serialize_map_with_no_len() {
 
     let s = to_string_pretty(&map).unwrap();
     let expected = pretty_str!({
-        "a": {},
-        "b": {}
+        a:{},
+        b:{},
     });
     assert_eq!(s, expected);
 }
@@ -1839,7 +1842,7 @@ fn test_byte_buf_de_multiple() {
 }
 
 #[test]
-fn test_json_pointer() {
+fn test_scon_pointer() {
     // Test case taken from https://tools.ietf.org/html/rfc6901#page-5
     let data: Value = from_str(
         r#"{
@@ -1857,17 +1860,17 @@ fn test_json_pointer() {
     )
     .unwrap();
     assert_eq!(data.pointer("").unwrap(), &data);
-    assert_eq!(data.pointer("/foo").unwrap(), &json!(["bar", "baz"]));
-    assert_eq!(data.pointer("/foo/0").unwrap(), &json!("bar"));
-    assert_eq!(data.pointer("/").unwrap(), &json!(0));
-    assert_eq!(data.pointer("/a~1b").unwrap(), &json!(1));
-    assert_eq!(data.pointer("/c%d").unwrap(), &json!(2));
-    assert_eq!(data.pointer("/e^f").unwrap(), &json!(3));
-    assert_eq!(data.pointer("/g|h").unwrap(), &json!(4));
-    assert_eq!(data.pointer("/i\\j").unwrap(), &json!(5));
-    assert_eq!(data.pointer("/k\"l").unwrap(), &json!(6));
-    assert_eq!(data.pointer("/ ").unwrap(), &json!(7));
-    assert_eq!(data.pointer("/m~0n").unwrap(), &json!(8));
+    assert_eq!(data.pointer("/foo").unwrap(), &scon!(["bar", "baz"]));
+    assert_eq!(data.pointer("/foo/0").unwrap(), &scon!("bar"));
+    assert_eq!(data.pointer("/").unwrap(), &scon!(0));
+    assert_eq!(data.pointer("/a~1b").unwrap(), &scon!(1));
+    assert_eq!(data.pointer("/c%d").unwrap(), &scon!(2));
+    assert_eq!(data.pointer("/e^f").unwrap(), &scon!(3));
+    assert_eq!(data.pointer("/g|h").unwrap(), &scon!(4));
+    assert_eq!(data.pointer("/i\\j").unwrap(), &scon!(5));
+    assert_eq!(data.pointer("/k\"l").unwrap(), &scon!(6));
+    assert_eq!(data.pointer("/ ").unwrap(), &scon!(7));
+    assert_eq!(data.pointer("/m~0n").unwrap(), &scon!(8));
     // Invalid pointers
     assert!(data.pointer("/unknown").is_none());
     assert!(data.pointer("/e^f/ertz").is_none());
@@ -1876,7 +1879,7 @@ fn test_json_pointer() {
 }
 
 #[test]
-fn test_json_pointer_mut() {
+fn test_scon_pointer_mut() {
     // Test case taken from https://tools.ietf.org/html/rfc6901#page-5
     let mut data: Value = from_str(
         r#"{
@@ -1895,8 +1898,8 @@ fn test_json_pointer_mut() {
     .unwrap();
 
     // Basic pointer checks
-    assert_eq!(data.pointer_mut("/foo").unwrap(), &json!(["bar", "baz"]));
-    assert_eq!(data.pointer_mut("/foo/0").unwrap(), &json!("bar"));
+    assert_eq!(data.pointer_mut("/foo").unwrap(), &scon!(["bar", "baz"]));
+    assert_eq!(data.pointer_mut("/foo/0").unwrap(), &scon!("bar"));
     assert_eq!(data.pointer_mut("/").unwrap(), 0);
     assert_eq!(data.pointer_mut("/a~1b").unwrap(), 1);
     assert_eq!(data.pointer_mut("/c%d").unwrap(), 2);
@@ -1916,17 +1919,17 @@ fn test_json_pointer_mut() {
     // Mutable pointer checks
     *data.pointer_mut("/").unwrap() = 100.into();
     assert_eq!(data.pointer("/").unwrap(), 100);
-    *data.pointer_mut("/foo/0").unwrap() = json!("buzz");
-    assert_eq!(data.pointer("/foo/0").unwrap(), &json!("buzz"));
+    *data.pointer_mut("/foo/0").unwrap() = scon!("buzz");
+    assert_eq!(data.pointer("/foo/0").unwrap(), &scon!("buzz"));
 
     // Example of ownership stealing
     assert_eq!(
         data.pointer_mut("/a~1b")
-            .map(|m| mem::replace(m, json!(null)))
+            .map(|m| mem::replace(m, scon!(null)))
             .unwrap(),
         1
     );
-    assert_eq!(data.pointer("/a~1b").unwrap(), &json!(null));
+    assert_eq!(data.pointer("/a~1b").unwrap(), &scon!(null));
 
     // Need to compare against a clone so we don't anger the borrow checker
     // by taking out two references to a mutable value
@@ -1982,13 +1985,13 @@ fn test_integer_key() {
         (r#"{'123 '/}"#, "expected `\'` at line 1 column 6"),
     ]);
 
-    let err = from_value::<BTreeMap<i32, ()>>(json!({" 123":null})).unwrap_err();
+    let err = from_value::<BTreeMap<i32, ()>>(scon!({" 123":null})).unwrap_err();
     assert_eq!(
         err.to_string(),
         "invalid value: expected key to be a number in quotes",
     );
 
-    let err = from_value::<BTreeMap<i32, ()>>(json!({"123 ":null})).unwrap_err();
+    let err = from_value::<BTreeMap<i32, ()>>(scon!({"123 ":null})).unwrap_err();
     assert_eq!(
         err.to_string(),
         "invalid value: expected key to be a number in quotes",
@@ -2147,28 +2150,28 @@ fn test_effectively_string_keys() {
 }
 
 #[test]
-fn test_json_macro() {
+fn test_scon_macro() {
     // This is tricky because the <...> is not a single TT and the comma inside
     // looks like an array element separator.
-    let _ = json!([
+    let _ = scon!([
         <Result<(), ()> as Clone>::clone(&Ok(())),
         <Result<(), ()> as Clone>::clone(&Err(()))
     ]);
 
     // Same thing but in the map values.
-    let _ = json!({
+    let _ = scon!({
         "ok": <Result<(), ()> as Clone>::clone(&Ok(())),
         "err": <Result<(), ()> as Clone>::clone(&Err(()))
     });
 
     // It works in map keys but only if they are parenthesized.
-    let _ = json!({
+    let _ = scon!({
         (<Result<&str, ()> as Clone>::clone(&Ok("")).unwrap()): "ok",
         (<Result<(), &str> as Clone>::clone(&Err("")).unwrap_err()): "err"
     });
 
     #[deny(unused_results)]
-    let _ = json!({ "architecture": [true, null] });
+    let _ = scon!({ "architecture": [true, null] });
 }
 
 #[test]
@@ -2402,7 +2405,7 @@ fn test_borrowed_raw_value() {
     assert_eq!(r#"{"a":1,"b":{"foo": 2},"c":3}"#, wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
-    assert_eq!(json!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
+    assert_eq!(scon!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
 
     let array_from_str: Vec<&RawValue> =
         serde_scon::from_str(r#"["a", 42, {"foo": "bar"}, null]"#).unwrap();
@@ -2474,14 +2477,14 @@ fn test_boxed_raw_value() {
     assert_eq!(r#"{"foo": 2}"#, wrapper_from_reader.b.get());
 
     let wrapper_from_value: Wrapper =
-        serde_scon::from_value(json!({"a": 1, "b": {"foo": 2}, "c": 3})).unwrap();
+        serde_scon::from_value(scon!({"a": 1, "b": {"foo": 2}, "c": 3})).unwrap();
     assert_eq!(r#"{"foo":2}"#, wrapper_from_value.b.get());
 
     let wrapper_to_string = serde_scon::to_string(&wrapper_from_str).unwrap();
     assert_eq!(r#"{"a":1,"b":{"foo": 2},"c":3}"#, wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
-    assert_eq!(json!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
+    assert_eq!(scon!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
 
     let array_from_str: Vec<Box<RawValue>> =
         serde_scon::from_str(r#"["a", 42, {"foo": "bar"}, null]"#).unwrap();
@@ -2511,9 +2514,9 @@ fn test_raw_value_from_string_unchecked() {
         c: i8,
     }
 
-    let json = r#"{"foo":[1,2,3],"bar":"\"escaped\""}"#.to_owned();
-    let checked = RawValue::from_string(json.clone()).unwrap();
-    let unchecked = unsafe { RawValue::from_string_unchecked(json) };
+    let scon = r#"{"foo":[1,2,3],"bar":"\"escaped\""}"#.to_owned();
+    let checked = RawValue::from_string(scon.clone()).unwrap();
+    let unchecked = unsafe { RawValue::from_string_unchecked(scon) };
     assert_eq!(checked.get(), unchecked.get());
 
     let wrapper = Wrapper {
@@ -2599,7 +2602,7 @@ fn test_borrow_in_map_key() {
         }
     }
 
-    let value = json!({ "map": { "1": null } });
+    let value = scon!({ "map": { "1": null } });
     Outer::deserialize(&value).unwrap();
 }
 
@@ -2616,7 +2619,7 @@ fn test_value_into_deserializer() {
     }
 
     let mut map = BTreeMap::new();
-    map.insert("inner", json!({ "string": "Hello World" }));
+    map.insert("inner", scon!({ "string": "Hello World" }));
 
     let outer = Outer::deserialize(serde::de::value::MapDeserializer::new(
         map.iter().map(|(k, v)| (*k, v)),
