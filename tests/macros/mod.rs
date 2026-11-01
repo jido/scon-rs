@@ -28,8 +28,8 @@ macro_rules! scon_str {
     (null) => {
         "/"
     };
-    ($other:lifetime) => {
-        concat!("`", stringify!($other))
+    ((($other:tt))) => {
+        concat!("`", stringify($other))
     };
     (($other:tt)) => {
         $other
@@ -73,8 +73,8 @@ macro_rules! pretty_str_impl {
     ($indent:expr, null) => {
         "/"
     };
-    ($indent:expr, $other:lifetime) => {
-        stringify!($other)
+    ($indent:expr, (($other:tt))) => {
+        concat!("`", stringify!($other))
     };
     ($indent:expr, ($other:tt)) => {
         $other

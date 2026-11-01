@@ -492,7 +492,7 @@ fn test_write_tuple() {
 
     test_encode_ok(&[((5, (6, "abc")), "[5,[6,`abc]]")]);
 
-    test_pretty_encode_ok(&[((5, (6, "abc")), &pretty_str!([5, [6, 'abc]]).replace("'", "`"))]);
+    test_pretty_encode_ok(&[((5, (6, "abc")), pretty_str!([5, [6, ((abc))]]))]);
 }
 
 #[test]
@@ -528,35 +528,35 @@ fn test_write_enum() {
         (Animal::Dog, "`Dog"),
         (
             Animal::Frog("Henry".to_owned(), vec![]),
-            &pretty_str!({
+            pretty_str!({
                 Frog:[
-                    'Henry,
+                    ((Henry)),
                     [],
                 ],
-            }).replace("'", "`"),
+            }),
         ),
         (
             Animal::Frog("Henry".to_owned(), vec![349]),
-            &pretty_str!({
+            pretty_str!({
                 Frog:[
-                    'Henry,
+                    ((Henry)),
                     [
                         349,
                     ],
                 ],
-            }).replace("'", "`"),
+            }),
         ),
         (
             Animal::Frog("Henry".to_owned(), vec![349, 102]),
-            &pretty_str!({
+            pretty_str!({
                 Frog:[
-                    'Henry,
+                    ((Henry)),
                     [
                       349,
                       102,
                     ],
                 ],
-            }).replace("'", "`"),
+            }),
         ),
     ]);
 }
@@ -574,7 +574,7 @@ fn test_write_option() {
 
     test_pretty_encode_ok(&[
         (None, "/"),
-        (Some(vec!["foo", "bar"]), &pretty_str!(['foo, 'bar]).replace("'", "`")),
+        (Some(vec!["foo", "bar"]), pretty_str!([((foo)), ((bar))])),
     ]);
 }
 
