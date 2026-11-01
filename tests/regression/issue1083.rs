@@ -1,7 +1,7 @@
-use serde_json::Value;
+use serde_scon::Value;
 
 fn assert_invalid_unicode_at(input: &[u8], column: usize) {
-    let err = serde_json::from_slice::<Value>(input).unwrap_err();
+    let err = serde_scon::from_slice::<Value>(input).unwrap_err();
     assert_eq!(
         err.to_string(),
         format!("invalid unicode code point at line 1 column {column}"),
@@ -11,7 +11,7 @@ fn assert_invalid_unicode_at(input: &[u8], column: usize) {
 
     #[cfg(feature = "std")]
     {
-        let err = serde_json::from_reader::<_, Value>(std::io::Cursor::new(input)).unwrap_err();
+        let err = serde_scon::from_reader::<_, Value>(std::io::Cursor::new(input)).unwrap_err();
         assert_eq!(
             err.to_string(),
             format!("invalid unicode code point at line 1 column {column}"),
@@ -43,14 +43,14 @@ fn invalid_utf8_at_start_of_string() {
 #[test]
 fn invalid_utf8_raw_value_matches_value() {
     let input = &[b'"', 0xCE, 0xF8, b'"'];
-    let value_err = serde_json::from_slice::<Value>(input).unwrap_err();
-    let raw_err = serde_json::from_slice::<Box<serde_json::value::RawValue>>(input).unwrap_err();
+    let value_err = serde_scon::from_slice::<Value>(input).unwrap_err();
+    let raw_err = serde_scon::from_slice::<Box<serde_scon::value::RawValue>>(input).unwrap_err();
     assert_eq!(value_err.to_string(), raw_err.to_string());
     assert_eq!(value_err.column(), 2);
 
     #[cfg(feature = "std")]
     {
-        let raw_reader_err = serde_json::from_reader::<_, Box<serde_json::value::RawValue>>(
+        let raw_reader_err = serde_scon::from_reader::<_, Box<serde_scon::value::RawValue>>(
             std::io::Cursor::new(input),
         )
         .unwrap_err();
@@ -65,13 +65,13 @@ fn invalid_utf8_in_multiline_raw_value() {
         (b"[\n \"\xff\",\n 0\n]".as_slice(), 2, 3),
         (b" \n  [\"\xff\",\n 0\n]".as_slice(), 2, 5),
     ] {
-        let err = serde_json::from_slice::<Box<serde_json::value::RawValue>>(input)
+        let err = serde_scon::from_slice::<Box<serde_scon::value::RawValue>>(input)
             .unwrap_err();
         assert_eq!((err.line(), err.column()), (line, column));
 
         #[cfg(feature = "std")]
         {
-            let err = serde_json::from_reader::<_, Box<serde_json::value::RawValue>>(
+            let err = serde_scon::from_reader::<_, Box<serde_scon::value::RawValue>>(
                 std::io::Cursor::new(input),
             )
             .unwrap_err();

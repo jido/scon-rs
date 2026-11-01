@@ -7,7 +7,7 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt::{self, Display};
-use core::hint;
+//use core::hint;
 use core::num::FpCategory;
 use core::str;
 use serde::ser::{self, Impossible, Serialize};
@@ -17,13 +17,14 @@ use serde::ser::{self, Impossible, Serialize};
 pub struct Serializer<W, F = CompactFormatter> {
     writer: W,
     formatter: F,
+    after_key: bool,
 }
 
 impl<W> Serializer<W>
 where
     W: io::Write,
 {
-    /// Creates a new JSON serializer.
+    /// Creates a new Scon serializer.
     #[inline]
     pub fn new(writer: W) -> Self {
         Serializer::with_formatter(writer, CompactFormatter)
@@ -34,7 +35,7 @@ impl<'a, W> Serializer<W, PrettyFormatter<'a>>
 where
     W: io::Write,
 {
-    /// Creates a new JSON pretty print serializer.
+    /// Creates a new Scon pretty print serializer.
     #[inline]
     pub fn pretty(writer: W) -> Self {
         Serializer::with_formatter(writer, PrettyFormatter::new())
@@ -46,17 +47,80 @@ where
     W: io::Write,
     F: Formatter,
 {
-    /// Creates a new JSON visitor whose output will be written to the writer
+    /// Creates a new Scon visitor whose output will be written to the writer
     /// specified.
     #[inline]
     pub fn with_formatter(writer: W, formatter: F) -> Self {
-        Serializer { writer, formatter }
+        Serializer { writer, formatter, after_key: false }
     }
 
     /// Unwrap the `Writer` from the `Serializer`.
     #[inline]
     pub fn into_inner(self) -> W {
         self.writer
+    }
+    
+    fn collect_key<T>(&mut self, value: &T) -> Result<()>
+    where
+        T: ?Sized + Display,
+    {
+      self.collect_str_impl(value, b'\'')
+    }
+
+    fn collect_str_impl<T>(&mut self, value: &T, quote: u8) -> Result<()>
+    where
+        T: ?Sized + Display,
+    {
+        use self::fmt::Write;
+
+        struct Adapter<'ser, W: 'ser, F: 'ser> {
+            writer: &'ser mut W,
+            formatter: &'ser mut F,
+            quote: u8,
+            error: Option<io::Error>,
+        }
+
+        impl<'ser, W, F> Write for Adapter<'ser, W, F>
+        where
+            W: io::Write,
+            F: Formatter,
+        {
+            fn write_str(&mut self, s: &str) -> fmt::Result {
+                debug_assert!(self.error.is_none());
+                match format_escaped_str_contents(self.writer, self.formatter, s, self.quote, b' ') {
+                    Ok(()) => Ok(()),
+                    Err(err) => {
+                        self.error = Some(err);
+                        Err(fmt::Error)
+                    }
+                }
+            }
+        }
+
+        tri!(self
+            .formatter
+            .begin_key(&mut self.writer)
+            .map_err(Error::io));
+        let mut adapter = Adapter {
+            writer: &mut self.writer,
+            formatter: &mut self.formatter,
+            quote: quote,
+            error: None,
+        };
+        match write!(adapter, "{}", value) {
+            Ok(()) => debug_assert!(adapter.error.is_none()),
+            Err(fmt::Error) => {
+                return Err(Error::io(adapter.error.expect("there should be an error")));
+            }
+        }
+        self.formatter
+            .end_key(&mut self.writer)
+            .map_err(Error::io)
+    }
+    
+    #[inline]
+    fn serialize_key(&mut self, value: &str) -> Result<()> {
+        format_escaped_key(&mut self.writer, &mut self.formatter, value).map_err(Error::io)
     }
 }
 
@@ -85,6 +149,12 @@ where
 
     #[inline]
     fn serialize_i8(self, value: i8) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_i8(&mut self.writer, value)
             .map_err(Error::io)
@@ -92,6 +162,12 @@ where
 
     #[inline]
     fn serialize_i16(self, value: i16) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_i16(&mut self.writer, value)
             .map_err(Error::io)
@@ -99,6 +175,12 @@ where
 
     #[inline]
     fn serialize_i32(self, value: i32) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_i32(&mut self.writer, value)
             .map_err(Error::io)
@@ -106,12 +188,24 @@ where
 
     #[inline]
     fn serialize_i64(self, value: i64) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_i64(&mut self.writer, value)
             .map_err(Error::io)
     }
 
     fn serialize_i128(self, value: i128) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_i128(&mut self.writer, value)
             .map_err(Error::io)
@@ -119,6 +213,12 @@ where
 
     #[inline]
     fn serialize_u8(self, value: u8) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_u8(&mut self.writer, value)
             .map_err(Error::io)
@@ -126,6 +226,12 @@ where
 
     #[inline]
     fn serialize_u16(self, value: u16) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_u16(&mut self.writer, value)
             .map_err(Error::io)
@@ -133,6 +239,12 @@ where
 
     #[inline]
     fn serialize_u32(self, value: u32) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_u32(&mut self.writer, value)
             .map_err(Error::io)
@@ -140,12 +252,24 @@ where
 
     #[inline]
     fn serialize_u64(self, value: u64) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_u64(&mut self.writer, value)
             .map_err(Error::io)
     }
 
     fn serialize_u128(self, value: u128) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         self.formatter
             .write_u128(&mut self.writer, value)
             .map_err(Error::io)
@@ -153,10 +277,16 @@ where
 
     #[inline]
     fn serialize_f32(self, value: f32) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         match value.classify() {
             FpCategory::Nan | FpCategory::Infinite => self
                 .formatter
-                .write_null(&mut self.writer)
+                .write_nan(&mut self.writer)
                 .map_err(Error::io),
             _ => self
                 .formatter
@@ -167,10 +297,16 @@ where
 
     #[inline]
     fn serialize_f64(self, value: f64) -> Result<()> {
+        if self.after_key {
+            match self.writer.write_all(&[b' ']) {
+                Ok(_) => (),
+                Err(e) => return Err(Error::io(e)),
+            }
+        }
         match value.classify() {
             FpCategory::Nan | FpCategory::Infinite => self
                 .formatter
-                .write_null(&mut self.writer)
+                .write_nan(&mut self.writer)
                 .map_err(Error::io),
             _ => self
                 .formatter
@@ -188,7 +324,7 @@ where
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<()> {
-        format_escaped_str(&mut self.writer, &mut self.formatter, value).map_err(Error::io)
+        format_escaped_str(&mut self.writer, &mut self.formatter, value, self.after_key).map_err(Error::io)
     }
 
     #[inline]
@@ -248,7 +384,7 @@ where
             .formatter
             .begin_object_key(&mut self.writer, true)
             .map_err(Error::io));
-        tri!(self.serialize_str(variant));
+        tri!(self.serialize_key(variant));
         tri!(self
             .formatter
             .end_object_key(&mut self.writer)
@@ -262,6 +398,7 @@ where
             .formatter
             .end_object_value(&mut self.writer)
             .map_err(Error::io));
+            self.after_key = false;
         self.formatter
             .end_object(&mut self.writer)
             .map_err(Error::io)
@@ -333,7 +470,7 @@ where
             .formatter
             .begin_object_key(&mut self.writer, true)
             .map_err(Error::io));
-        tri!(self.serialize_str(variant));
+        tri!(self.serialize_key(variant));
         tri!(self
             .formatter
             .end_object_key(&mut self.writer)
@@ -395,7 +532,7 @@ where
             .formatter
             .begin_object_key(&mut self.writer, true)
             .map_err(Error::io));
-        tri!(self.serialize_str(variant));
+        tri!(self.serialize_key(variant));
         tri!(self
             .formatter
             .end_object_key(&mut self.writer)
@@ -411,50 +548,9 @@ where
     where
         T: ?Sized + Display,
     {
-        use self::fmt::Write;
-
-        struct Adapter<'ser, W: 'ser, F: 'ser> {
-            writer: &'ser mut W,
-            formatter: &'ser mut F,
-            error: Option<io::Error>,
-        }
-
-        impl<'ser, W, F> Write for Adapter<'ser, W, F>
-        where
-            W: io::Write,
-            F: Formatter,
-        {
-            fn write_str(&mut self, s: &str) -> fmt::Result {
-                debug_assert!(self.error.is_none());
-                match format_escaped_str_contents(self.writer, self.formatter, s) {
-                    Ok(()) => Ok(()),
-                    Err(err) => {
-                        self.error = Some(err);
-                        Err(fmt::Error)
-                    }
-                }
-            }
-        }
-
-        tri!(self
-            .formatter
-            .begin_string(&mut self.writer)
-            .map_err(Error::io));
-        let mut adapter = Adapter {
-            writer: &mut self.writer,
-            formatter: &mut self.formatter,
-            error: None,
-        };
-        match write!(adapter, "{}", value) {
-            Ok(()) => debug_assert!(adapter.error.is_none()),
-            Err(fmt::Error) => {
-                return Err(Error::io(adapter.error.expect("there should be an error")));
-            }
-        }
-        self.formatter
-            .end_string(&mut self.writer)
-            .map_err(Error::io)
+        self.collect_str_impl(value, b'"') //"
     }
+
 }
 
 // Not public API. Should be pub(crate).
@@ -499,6 +595,7 @@ where
                     .begin_array_value(&mut ser.writer, *state == State::First)
                     .map_err(Error::io));
                 *state = State::Rest;
+                ser.after_key = false;
                 tri!(value.serialize(&mut **ser));
                 ser.formatter
                     .end_array_value(&mut ser.writer)
@@ -630,6 +727,7 @@ where
                 *state = State::Rest;
 
                 tri!(key.serialize(MapKeySerializer { ser: *ser }));
+                ser.after_key = true;
 
                 ser.formatter
                     .end_object_key(&mut ser.writer)
@@ -802,7 +900,7 @@ where
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<()> {
-        self.ser.serialize_str(value)
+        self.ser.serialize_key(value)
     }
 
     #[inline]
@@ -812,7 +910,7 @@ where
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<()> {
-        self.ser.serialize_str(variant)
+        self.ser.serialize_key(variant)
     }
 
     #[inline]
@@ -832,19 +930,10 @@ where
     type SerializeStructVariant = Impossible<(), Error>;
 
     fn serialize_bool(self, value: bool) -> Result<()> {
-        tri!(self
+        self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
-            .map_err(Error::io));
-        tri!(self
-            .ser
-            .formatter
-            .write_bool(&mut self.ser.writer, value)
-            .map_err(Error::io));
-        self.ser
-            .formatter
-            .end_string(&mut self.ser.writer)
+            .write_bool_key(&mut self.ser.writer, value)
             .map_err(Error::io)
     }
 
@@ -852,7 +941,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -861,7 +950,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -869,7 +958,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -878,7 +967,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -886,7 +975,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -895,7 +984,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -903,7 +992,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -912,7 +1001,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -920,7 +1009,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -929,7 +1018,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -937,7 +1026,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -946,7 +1035,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -954,7 +1043,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -963,7 +1052,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -971,7 +1060,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -980,7 +1069,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -988,7 +1077,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -997,7 +1086,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -1005,7 +1094,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -1014,7 +1103,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -1026,7 +1115,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -1035,7 +1124,7 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
@@ -1047,7 +1136,7 @@ where
         tri!(self
             .ser
             .formatter
-            .begin_string(&mut self.ser.writer)
+            .begin_key(&mut self.ser.writer)
             .map_err(Error::io));
         tri!(self
             .ser
@@ -1056,12 +1145,12 @@ where
             .map_err(Error::io));
         self.ser
             .formatter
-            .end_string(&mut self.ser.writer)
+            .end_key(&mut self.ser.writer)
             .map_err(Error::io)
     }
 
     fn serialize_char(self, value: char) -> Result<()> {
-        self.ser.serialize_str(value.encode_utf8(&mut [0u8; 4]))
+        self.ser.serialize_key(value.encode_utf8(&mut [0u8; 4]))
     }
 
     fn serialize_bytes(self, _value: &[u8]) -> Result<()> {
@@ -1148,7 +1237,7 @@ where
     where
         T: ?Sized + Display,
     {
-        self.ser.collect_str(value)
+        self.ser.collect_key(value)
     }
 }
 
@@ -1512,7 +1601,7 @@ impl<'a, W: io::Write, F: Formatter> ser::Serializer for RawValueStrEmitter<'a, 
         self.serialize_str(&value.to_string())
     }
 }
-
+/*
 /// Represents a character escape code in a type-safe manner.
 pub enum CharEscape {
     /// An escaped quote `"`
@@ -1535,22 +1624,22 @@ pub enum CharEscape {
     /// `\u00XX` where `XX` are two hex characters)
     AsciiControl(u8),
 }
-
+*/
 /// This trait abstracts away serializing the JSON control characters, which allows the user to
 /// optionally pretty print the JSON output.
 pub trait Formatter {
     /// Writes a `null` value to the specified writer.
     #[inline]
-    fn write_null<W>(&mut self, writer: &mut W) -> io::Result<()>
+    fn write_null_key<W>(&mut self, writer: &mut W) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        writer.write_all(b"null")
+        writer.write_all(b"null" as &[u8])
     }
 
     /// Writes a `true` or `false` value to the specified writer.
     #[inline]
-    fn write_bool<W>(&mut self, writer: &mut W, value: bool) -> io::Result<()>
+    fn write_bool_key<W>(&mut self, writer: &mut W, value: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
@@ -1560,6 +1649,38 @@ pub trait Formatter {
             b"false" as &[u8]
         };
         writer.write_all(s)
+    }
+
+    /// Writes a null value to the specified writer.
+    #[inline]
+    fn write_null<W>(&mut self, writer: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        writer.write_all(b"/" as &[u8])
+    }
+
+    /// Writes a true or false value to the specified writer.
+    #[inline]
+    fn write_bool<W>(&mut self, writer: &mut W, value: bool) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        let s = if value {
+            b"*" as &[u8]
+        } else {
+            b"~" as &[u8]
+        };
+        writer.write_all(s)
+    }
+
+    /// Writes a NaN value to the specified writer.
+    #[inline]
+    fn write_nan<W>(&mut self, writer: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        writer.write_all(b"?" as &[u8])
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1741,6 +1862,15 @@ pub trait Formatter {
         writer.write_all(b"\"")
     }
 
+    /// wadla wadla
+    #[inline]
+    fn begin_key<W>(&mut self, writer: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        writer.write_all(b"'")
+    }
+
     /// Called after each series of `write_string_fragment` and
     /// `write_char_escape`.  Writes a `"` to the specified writer.
     #[inline]
@@ -1749,6 +1879,15 @@ pub trait Formatter {
         W: ?Sized + io::Write,
     {
         writer.write_all(b"\"")
+    }
+
+    /// wadla wadla 2
+    #[inline]
+    fn end_key<W>(&mut self, writer: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        writer.write_all(b"'")
     }
 
     /// Writes a string fragment that doesn't need any escaping to the
@@ -1760,7 +1899,7 @@ pub trait Formatter {
     {
         writer.write_all(fragment.as_bytes())
     }
-
+    /*
     /// Writes a character escape code to the specified writer.
     #[inline]
     fn write_char_escape<W>(&mut self, writer: &mut W, char_escape: CharEscape) -> io::Result<()>
@@ -1770,7 +1909,7 @@ pub trait Formatter {
         use self::CharEscape::*;
 
         let escape_char = match char_escape {
-            Quote => b'"',
+            DoubleQuote => b"\""[0],
             ReverseSolidus => b'\\',
             Solidus => b'/',
             Backspace => b'b',
@@ -1780,7 +1919,7 @@ pub trait Formatter {
             Tab => b't',
             AsciiControl(_) => b'u',
         };
-
+        
         match char_escape {
             AsciiControl(byte) => {
                 static HEX_DIGITS: [u8; 16] = *b"0123456789abcdef";
@@ -1796,7 +1935,7 @@ pub trait Formatter {
             }
             _ => writer.write_all(&[b'\\', escape_char]),
         }
-    }
+    }*/
 
     /// Writes the representation of a byte array. Formatters can choose whether
     /// to represent bytes as a JSON array of integers (the default), or some
@@ -1907,11 +2046,11 @@ pub trait Formatter {
     /// the specified writer by either this method or
     /// `end_object_key`.
     #[inline]
-    fn begin_object_value<W>(&mut self, writer: &mut W) -> io::Result<()>
+    fn begin_object_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        writer.write_all(b":")
+      Ok(())
     }
 
     /// Called after every object value.
@@ -1949,9 +2088,9 @@ pub struct PrettyFormatter<'a> {
 }
 
 impl<'a> PrettyFormatter<'a> {
-    /// Construct a pretty printer formatter that defaults to using two spaces for indentation.
+    /// Construct a pretty printer formatter that defaults to using one space for indentation.
     pub fn new() -> Self {
-        PrettyFormatter::with_indent(b"  ")
+        PrettyFormatter::with_indent(b" ")
     }
 
     /// Construct a pretty printer formatter that uses the `indent` string for indentation.
@@ -2001,7 +2140,7 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     where
         W: ?Sized + io::Write,
     {
-        tri!(writer.write_all(if first { b"\n" } else { b",\n" }));
+        tri!(writer.write_all(if first { b"\n" } else { b"\n" }));
         indent(writer, self.current_indent, self.indent)
     }
 
@@ -2044,16 +2183,16 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     where
         W: ?Sized + io::Write,
     {
-        tri!(writer.write_all(if first { b"\n" } else { b",\n" }));
+        tri!(writer.write_all(if first { b"\n" } else { b"\n" }));
         indent(writer, self.current_indent, self.indent)
     }
 
     #[inline]
-    fn begin_object_value<W>(&mut self, writer: &mut W) -> io::Result<()>
+    fn begin_object_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        writer.write_all(b": ")
+        Ok(())
     }
 
     #[inline]
@@ -2066,16 +2205,23 @@ impl<'a> Formatter for PrettyFormatter<'a> {
     }
 }
 
-fn format_escaped_str<W, F>(writer: &mut W, formatter: &mut F, value: &str) -> io::Result<()>
+fn format_escaped_str<W, F>(writer: &mut W, formatter: &mut F, value: &str, kv: bool) -> io::Result<()>
 where
     W: ?Sized + io::Write,
     F: ?Sized + Formatter,
 {
-    tri!(formatter.begin_string(writer));
-    tri!(format_escaped_str_contents(writer, formatter, value));
-    formatter.end_string(writer)
+    let prefix = if kv {b' '} else {b'`'};
+    format_escaped_str_contents(writer, formatter, value, b'"', prefix) //"
 }
 
+fn format_escaped_key<W, F>(writer: &mut W, formatter: &mut F, value: &str) -> io::Result<()>
+where
+    W: ?Sized + io::Write,
+    F: ?Sized + Formatter,
+{
+    format_escaped_str_contents(writer, formatter, value, b'\'', 0)
+}
+/*
 fn format_escaped_str_contents<W, F>(
     writer: &mut W,
     formatter: &mut F,
@@ -2131,37 +2277,87 @@ where
 
     formatter.write_string_fragment(writer, string_run)
 }
+*/
+fn format_escaped_str_contents<W, F>(
+    writer: &mut W,
+    formatter: &mut F,
+    value: &str,
+    quote: u8,
+    prefix: u8,
+) -> io::Result<()>
+where
+    W: ?Sized + io::Write,
+    F: ?Sized + Formatter,
+{
+  let mut bytes = value.as_bytes();
 
-const BB: u8 = b'b'; // \x08
-const TT: u8 = b't'; // \x09
-const NN: u8 = b'n'; // \x0A
-const FF: u8 = b'f'; // \x0C
-const RR: u8 = b'r'; // \x0D
-const QU: u8 = b'"'; // \x22
-const BS: u8 = b'\\'; // \x5C
-const UU: u8 = b'u'; // \x00...\x1F except the ones above
+  let mut quoted = !value.chars().next().is_some_and(|o| o == '$' || o.is_alphabetic()); // empty string is quoted
+  if quoted {
+    tri!(writer.write_all(&[quote]));
+  }
+
+  let mut i = 0;
+  while i < bytes.len() {
+    let (string_run, rest) = bytes.split_at(i);
+    let byte = rest[0];
+
+    i += 1;
+    
+    if SAFE_CHAR[byte as usize] == 0 {
+      if !quoted {
+        quoted = true;
+        tri!(writer.write_all(&[quote]));
+      }
+      
+      if byte == quote {
+        // Safety: string_run is a valid utf8 string, since we only split on ascii sequences
+        let string_run = unsafe { str::from_utf8_unchecked(string_run) };
+        if !string_run.is_empty() {
+          tri!(formatter.write_string_fragment(writer, string_run));
+        }
+        tri!(writer.write_all(&[quote]));
+        
+        bytes = rest;
+        i = 1;
+      }
+    }
+  }
+  if !quoted && prefix != 0 {
+    tri!(writer.write_all(&[prefix]));
+  }
+  // Safety: bytes is a valid utf8 string, since we only split on ascii sequences
+  let string_run = unsafe { str::from_utf8_unchecked(bytes) };
+  if !string_run.is_empty() {
+    tri!(formatter.write_string_fragment(writer, string_run));
+  }
+  if quoted {
+    tri!(writer.write_all(&[quote]));
+  }
+  Ok(())
+}
+      
 const __: u8 = 0;
 
 // Lookup table of escape sequences. A value of b'x' at index i means that byte
 // i is escaped as "\x" in JSON. A value of 0 means that byte i is not escaped.
-static ESCAPE: [u8; 256] = [
+static SAFE_CHAR: [u8; 256] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
-    UU, UU, UU, UU, UU, UU, UU, UU, BB, TT, NN, UU, FF, RR, UU, UU, // 0
-    UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, // 1
-    __, __, QU, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-    __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
+    __, 1 , __, 1 , 1 , 1 , 1 , __, 1 , 1 , __, 1 , __, 1 , 1 , __, // 2
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , __, 1 , __, 1 , 1 , __, // 3
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // 4
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , __, 1 , __, __, 1 , // 5
+    __, 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // 6
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , __, 1 , __, __, __, // 7
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // 8
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // 9
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // A
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // B
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // C
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // D
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // E
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , // F
 ];
 
 /// Serialize the given data structure as JSON into the I/O stream.

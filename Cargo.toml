@@ -1,13 +1,13 @@
 [package]
-name = "serde_json"
-version = "1.0.154"
+name = "serde_scon"
+version = "0.0.1"
 categories = ["encoding", "parser-implementations", "no-std"]
-description = "A JSON serialization file format"
+description = "A Scon serialization file format"
 documentation = "https://docs.rs/serde_json"
 edition = "2021"
-keywords = ["json", "serde", "serialization"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/serde-rs/json"
+keywords = ["scon", "serde", "serialization"]
+license = "MIT"
+repository = "https://github.com/jido/scon-rs"
 rust-version = "1.71"
 
 [dependencies]
