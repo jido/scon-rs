@@ -149,140 +149,74 @@ where
 
     #[inline]
     fn serialize_i8(self, value: i8) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_i8(&mut self.writer, value)
+            .write_i8(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_i16(self, value: i16) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_i16(&mut self.writer, value)
+            .write_i16(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_i32(self, value: i32) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_i32(&mut self.writer, value)
+            .write_i32(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_i64(self, value: i64) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_i64(&mut self.writer, value)
+            .write_i64(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     fn serialize_i128(self, value: i128) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_i128(&mut self.writer, value)
+            .write_i128(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_u8(self, value: u8) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_u8(&mut self.writer, value)
+            .write_u8(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_u16(self, value: u16) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_u16(&mut self.writer, value)
+            .write_u16(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_u32(self, value: u32) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_u32(&mut self.writer, value)
+            .write_u32(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_u64(self, value: u64) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_u64(&mut self.writer, value)
+            .write_u64(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     fn serialize_u128(self, value: u128) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         self.formatter
-            .write_u128(&mut self.writer, value)
+            .write_u128(&mut self.writer, value, self.after_key)
             .map_err(Error::io)
     }
 
     #[inline]
     fn serialize_f32(self, value: f32) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         match value.classify() {
             FpCategory::Nan => self
                 .formatter
@@ -290,23 +224,17 @@ where
                 .map_err(Error::io),
             FpCategory::Infinite => self
                 .formatter
-                .write_inf(&mut self.writer, value < 0.0)
+                .write_inf(&mut self.writer, value < 0.0, self.after_key)
                 .map_err(Error::io),
             _ => self
                 .formatter
-                .write_f32(&mut self.writer, value)
+                .write_f32(&mut self.writer, value, self.after_key)
                 .map_err(Error::io),
         }
     }
 
     #[inline]
     fn serialize_f64(self, value: f64) -> Result<()> {
-        if self.after_key {
-            match self.writer.write_all(&[b' ']) {
-                Ok(_) => (),
-                Err(e) => return Err(Error::io(e)),
-            }
-        }
         match value.classify() {
             FpCategory::Nan => self
                 .formatter
@@ -314,11 +242,11 @@ where
                 .map_err(Error::io),
             FpCategory::Infinite => self
                 .formatter
-                .write_inf(&mut self.writer, value < 0.0)
+                .write_inf(&mut self.writer, value < 0.0, self.after_key)
                 .map_err(Error::io),
             _ => self
                 .formatter
-                .write_f64(&mut self.writer, value)
+                .write_f64(&mut self.writer, value, self.after_key)
                 .map_err(Error::io),
         }
     }
@@ -406,7 +334,7 @@ where
             .formatter
             .end_object_value(&mut self.writer)
             .map_err(Error::io));
-            self.after_key = false;
+        self.after_key = false;
         self.formatter
             .end_object(&mut self.writer)
             .map_err(Error::io)
@@ -954,7 +882,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_i8(&mut self.ser.writer, value)
+            .write_i8(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -971,7 +899,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_i16(&mut self.ser.writer, value)
+            .write_i16(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -988,7 +916,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_i32(&mut self.ser.writer, value)
+            .write_i32(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1005,7 +933,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_i64(&mut self.ser.writer, value)
+            .write_i64(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1022,7 +950,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_i128(&mut self.ser.writer, value)
+            .write_i128(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1039,7 +967,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_u8(&mut self.ser.writer, value)
+            .write_u8(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1056,7 +984,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_u16(&mut self.ser.writer, value)
+            .write_u16(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1073,7 +1001,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_u32(&mut self.ser.writer, value)
+            .write_u32(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1090,7 +1018,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_u64(&mut self.ser.writer, value)
+            .write_u64(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1107,7 +1035,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_u128(&mut self.ser.writer, value)
+            .write_u128(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1128,7 +1056,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_f32(&mut self.ser.writer, value)
+            .write_f32(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1149,7 +1077,7 @@ where
         tri!(self
             .ser
             .formatter
-            .write_f64(&mut self.ser.writer, value)
+            .write_f64(&mut self.ser.writer, value, false)
             .map_err(Error::io));
         self.ser
             .formatter
@@ -1609,33 +1537,30 @@ impl<'a, W: io::Write, F: Formatter> ser::Serializer for RawValueStrEmitter<'a, 
         self.serialize_str(&value.to_string())
     }
 }
-/*
-/// Represents a character escape code in a type-safe manner.
-pub enum CharEscape {
-    /// An escaped quote `"`
-    Quote,
-    /// An escaped reverse solidus `\`
-    ReverseSolidus,
-    /// An escaped solidus `/`
-    Solidus,
-    /// An escaped backspace character (usually escaped as `\b`)
-    Backspace,
-    /// An escaped form feed character (usually escaped as `\f`)
-    FormFeed,
-    /// An escaped line feed character (usually escaped as `\n`)
-    LineFeed,
-    /// An escaped carriage return character (usually escaped as `\r`)
-    CarriageReturn,
-    /// An escaped tab character (usually escaped as `\t`)
-    Tab,
-    /// An escaped ASCII plane control character (usually escaped as
-    /// `\u00XX` where `XX` are two hex characters)
-    AsciiControl(u8),
-}
-*/
+
 /// This trait abstracts away serializing the Scon control characters, which allows the user to
 /// optionally pretty print the Scon output.
 pub trait Formatter {
+    /// Prepends a space (b' ') to the formatted number string from an `itoa::Buffer`
+    /// Returns a new `Vec<u8>` with the space prepended if prepend == true
+    fn prepend_space_to_buffer(buffer: &str, prepend: bool) -> Vec<u8> {
+        // Get the current formatted string
+        let original_bytes = buffer.as_bytes();
+
+        // Create a new buffer with prepended space
+        let mut result: Vec<u8>;
+        if prepend {
+            result = Vec::with_capacity(original_bytes.len() + 1);
+            result.push(b' ');  // Prepend space
+            result.extend(original_bytes);
+        }
+        else {
+            result = original_bytes.to_vec();
+        }
+
+        result
+    }
+
     /// Writes a `null` value to the specified writer.
     #[inline]
     fn write_null_key<W>(&mut self, writer: &mut W) -> io::Result<()>
@@ -1693,121 +1618,125 @@ pub trait Formatter {
 
     /// Writes an infinite value to the specified writer.
     #[inline]
-    fn write_inf<W>(&mut self, writer: &mut W, neg: bool) -> io::Result<()>
+    fn write_inf<W>(&mut self, writer: &mut W, neg: bool, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        writer.write_all(if neg {b"-#"} else {b"+#"} as &[u8])
+        let mut inf: &[u8] = if neg {b" -#"} else {b" +#"};
+        if !after_key {
+            (_, inf) = inf.split_at(1);
+        }
+        writer.write_all(inf)
     }
 
     /// Writes an integer value like `-123` to the specified writer.
     #[inline]
-    fn write_i8<W>(&mut self, writer: &mut W, value: i8) -> io::Result<()>
+    fn write_i8<W>(&mut self, writer: &mut W, value: i8, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
     #[inline]
-    fn write_i16<W>(&mut self, writer: &mut W, value: i16) -> io::Result<()>
+    fn write_i16<W>(&mut self, writer: &mut W, value: i16, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
     #[inline]
-    fn write_i32<W>(&mut self, writer: &mut W, value: i32) -> io::Result<()>
+    fn write_i32<W>(&mut self, writer: &mut W, value: i32, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
     #[inline]
-    fn write_i64<W>(&mut self, writer: &mut W, value: i64) -> io::Result<()>
+    fn write_i64<W>(&mut self, writer: &mut W, value: i64, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
     #[inline]
-    fn write_i128<W>(&mut self, writer: &mut W, value: i128) -> io::Result<()>
+    fn write_i128<W>(&mut self, writer: &mut W, value: i128, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
     #[inline]
-    fn write_u8<W>(&mut self, writer: &mut W, value: u8) -> io::Result<()>
+    fn write_u8<W>(&mut self, writer: &mut W, value: u8, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
     #[inline]
-    fn write_u16<W>(&mut self, writer: &mut W, value: u16) -> io::Result<()>
+    fn write_u16<W>(&mut self, writer: &mut W, value: u16, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
     #[inline]
-    fn write_u32<W>(&mut self, writer: &mut W, value: u32) -> io::Result<()>
+    fn write_u32<W>(&mut self, writer: &mut W, value: u32, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
     #[inline]
-    fn write_u64<W>(&mut self, writer: &mut W, value: u64) -> io::Result<()>
+    fn write_u64<W>(&mut self, writer: &mut W, value: u64, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
     #[inline]
-    fn write_u128<W>(&mut self, writer: &mut W, value: u128) -> io::Result<()>
+    fn write_u128<W>(&mut self, writer: &mut W, value: u128, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes a floating point value like `-31.26e+12` to the specified writer.
@@ -1826,13 +1755,13 @@ pub trait Formatter {
     /// [`is_nan`]: f32::is_nan
     /// [`is_infinite`]: f32::is_infinite
     #[inline]
-    fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
+    fn write_f32<W>(&mut self, writer: &mut W, value: f32, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = zmij::Buffer::new();
         let s = buffer.format_finite(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes a floating point value like `-31.26e+12` to the specified writer.
@@ -1851,13 +1780,13 @@ pub trait Formatter {
     /// [`is_nan`]: f64::is_nan
     /// [`is_infinite`]: f64::is_infinite
     #[inline]
-    fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
+    fn write_f64<W>(&mut self, writer: &mut W, value: f64, after_key: bool) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
         let mut buffer = zmij::Buffer::new();
         let s = buffer.format_finite(value);
-        writer.write_all(s.as_bytes())
+        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
     }
 
     /// Writes a number that has already been rendered to a string.
@@ -1916,43 +1845,6 @@ pub trait Formatter {
     {
         writer.write_all(fragment.as_bytes())
     }
-    /*
-    /// Writes a character escape code to the specified writer.
-    #[inline]
-    fn write_char_escape<W>(&mut self, writer: &mut W, char_escape: CharEscape) -> io::Result<()>
-    where
-        W: ?Sized + io::Write,
-    {
-        use self::CharEscape::*;
-
-        let escape_char = match char_escape {
-            DoubleQuote => b"\""[0],
-            ReverseSolidus => b'\\',
-            Solidus => b'/',
-            Backspace => b'b',
-            FormFeed => b'f',
-            LineFeed => b'n',
-            CarriageReturn => b'r',
-            Tab => b't',
-            AsciiControl(_) => b'u',
-        };
-        
-        match char_escape {
-            AsciiControl(byte) => {
-                static HEX_DIGITS: [u8; 16] = *b"0123456789abcdef";
-                let bytes = &[
-                    b'\\',
-                    escape_char,
-                    b'0',
-                    b'0',
-                    HEX_DIGITS[(byte >> 4) as usize],
-                    HEX_DIGITS[(byte & 0xF) as usize],
-                ];
-                writer.write_all(bytes)
-            }
-            _ => writer.write_all(&[b'\\', escape_char]),
-        }
-    }*/
 
     /// Writes the representation of a byte array. Formatters can choose whether
     /// to represent bytes as a Scon array of integers (the default), or some
@@ -1965,7 +1857,7 @@ pub trait Formatter {
         let mut first = true;
         for byte in value {
             tri!(self.begin_array_value(writer, first));
-            tri!(self.write_u8(writer, *byte));
+            tri!(self.write_u8(writer, *byte, false));
             tri!(self.end_array_value(writer));
             first = false;
         }
