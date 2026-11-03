@@ -180,13 +180,13 @@ impl Number {
         match self.n {
             N::PosInt(n) => Some(n as f64),
             N::NegInt(n) => Some(n as f64),
-            N::Float(n) => Some(n),
+            N::Float(n) => Some(n).filter(|float| float.is_finite()),
             N::Infinity => Some(f64::INFINITY),
             N::NegInfinity => Some(f64::NEG_INFINITY),
             N::NaN => Some(f64::NAN),
         }
         #[cfg(feature = "arbitrary_precision")]
-        self.n.parse::<f64>().ok()
+        self.n.parse::<f64>().ok().filter(|float| float.is_finite())
     }
 
     /// Converts a `f64` to a `Number`. Infinite or NaN values are not supported
@@ -213,8 +213,7 @@ impl Number {
         if f.is_finite() {
             let n = zmij::Buffer::new().format_finite(f).to_owned();
             Some(Number { n })
-        }
-        else {
+        } else {
             None
         }
     }
@@ -335,13 +334,13 @@ impl Number {
         match self.n {
             N::PosInt(n) => Some(n as f32),
             N::NegInt(n) => Some(n as f32),
-            N::Float(n) => Some(n as f32),
+            N::Float(n) => Some(n as f32).filter(|float| float.is_finite()),
             N::Infinity => Some(f32::INFINITY),
             N::NegInfinity => Some(f32::NEG_INFINITY),
             N::NaN => Some(f32::NAN),
         }
         #[cfg(feature = "arbitrary_precision")]
-        self.n.parse::<f32>().ok()
+        self.n.parse::<f32>().ok().filter(|float| float.is_finite())
     }
 
     pub(crate) fn from_f32(f: f32) -> Option<Number> {
@@ -358,8 +357,7 @@ impl Number {
         if f.is_finite() {
             let n = zmij::Buffer::new().format_finite(f).to_owned();
             Some(Number { n })
-        }
-        else {
+        } else {
             None
         }
     }
