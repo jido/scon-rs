@@ -31,6 +31,9 @@ enum N {
     NegInt(i64),
     /// Always finite.
     Float(f64),
+    Infinity,
+    NegInfinity,
+    NaN,
 }
 
 #[cfg(not(feature = "arbitrary_precision"))]
@@ -40,6 +43,9 @@ impl PartialEq for N {
             (N::PosInt(a), N::PosInt(b)) => a == b,
             (N::NegInt(a), N::NegInt(b)) => a == b,
             (N::Float(a), N::Float(b)) => a == b,
+            (N::Infinity, N::Infinity) => true,
+            (N::NegInfinity, N::NegInfinity) => true,
+            (N::NaN, N::NaN) => true,   // comparing type not value
             _ => false,
         }
     }
@@ -64,7 +70,16 @@ impl Hash for N {
                 } else {
                     f.to_bits().hash(h);
                 }
-            }
+            },
+            N::Infinity => {
+                f64::INFINITY.to_bits().hash(h);
+            },
+            N::NegInfinity => {
+                f64::NEG_INFINITY.to_bits().hash(h);
+            },
+            N::NaN => {
+                f64::NAN.to_bits().hash(h);
+            },
         }
     }
 }
@@ -83,7 +98,7 @@ impl Number {
         match self.n {
             N::PosInt(v) => v <= i64::MAX as u64,
             N::NegInt(_) => true,
-            N::Float(_) => false,
+            _ => false,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.as_i64().is_some()
@@ -97,7 +112,7 @@ impl Number {
         #[cfg(not(feature = "arbitrary_precision"))]
         match self.n {
             N::PosInt(_) => true,
-            N::NegInt(_) | N::Float(_) => false,
+            _ => false,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.as_u64().is_some()
@@ -114,13 +129,14 @@ impl Number {
         #[cfg(not(feature = "arbitrary_precision"))]
         match self.n {
             N::Float(_) => true,
+            N::Infinity | N::NegInfinity | N::NaN => true,
             N::PosInt(_) | N::NegInt(_) => false,
         }
         #[cfg(feature = "arbitrary_precision")]
         {
             for c in self.n.chars() {
                 if c == '.' || c == 'e' || c == 'E' {
-                    return self.n.parse::<f64>().is_ok_and(f64::is_finite);
+                    return self.n.parse::<f64>();
                 }
             }
             false
@@ -140,7 +156,7 @@ impl Number {
                 }
             }
             N::NegInt(n) => Some(n),
-            N::Float(_) => None,
+            _ => None,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.n.parse().ok()
@@ -152,7 +168,7 @@ impl Number {
         #[cfg(not(feature = "arbitrary_precision"))]
         match self.n {
             N::PosInt(n) => Some(n),
-            N::NegInt(_) | N::Float(_) => None,
+            _ => None,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.n.parse().ok()
@@ -165,13 +181,16 @@ impl Number {
             N::PosInt(n) => Some(n as f64),
             N::NegInt(n) => Some(n as f64),
             N::Float(n) => Some(n),
+            N::Infinity => Some(f64::INFINITY),
+            N::NegInfinity => Some(f64::NEG_INFINITY),
+            N::NaN => Some(f64::NAN),
         }
         #[cfg(feature = "arbitrary_precision")]
-        self.n.parse::<f64>().ok().filter(|float| float.is_finite())
+        self.n.parse::<f64>().ok()
     }
 
-    /// Converts a finite `f64` to a `Number`. Infinite or NaN values are not JSON
-    /// numbers.
+    /// Converts a `f64` to a `Number`. Infinite or NaN values are not supported
+    /// in arbitrary precision.
     ///
     /// ```
     /// # use serde_json::Number;
@@ -181,19 +200,21 @@ impl Number {
     /// assert!(Number::from_f64(f64::NAN).is_none());
     /// ```
     pub fn from_f64(f: f64) -> Option<Number> {
-        if f.is_finite() {
-            let n = {
-                #[cfg(not(feature = "arbitrary_precision"))]
-                {
-                    N::Float(f)
-                }
-                #[cfg(feature = "arbitrary_precision")]
-                {
-                    zmij::Buffer::new().format_finite(f).to_owned()
-                }
-            };
+        #[cfg(not(feature = "arbitrary_precision"))]
+        {
+            let n = if f.is_infinite() {
+                if f > 0.0 {N::Infinity} else {N::NegInfinity}
+            }
+            else if f.is_nan() {N::NaN}
+            else {N::Float(f)};
             Some(Number { n })
-        } else {
+        }
+        #[cfg(feature = "arbitrary_precision")]
+        if f.is_finite() {
+            let n = zmij::Buffer::new().format_finite(f).to_owned();
+            Some(Number { n })
+        }
+        else {
             None
         }
     }
@@ -205,7 +226,7 @@ impl Number {
         match self.n {
             N::PosInt(n) => Some(n as i128),
             N::NegInt(n) => Some(n as i128),
-            N::Float(_) => None,
+            _ => None,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.n.parse().ok()
@@ -217,7 +238,7 @@ impl Number {
         #[cfg(not(feature = "arbitrary_precision"))]
         match self.n {
             N::PosInt(n) => Some(n as u128),
-            N::NegInt(_) | N::Float(_) => None,
+            _ => None,
         }
         #[cfg(feature = "arbitrary_precision")]
         self.n.parse().ok()
@@ -314,26 +335,31 @@ impl Number {
         match self.n {
             N::PosInt(n) => Some(n as f32),
             N::NegInt(n) => Some(n as f32),
-            N::Float(n) => Some(n as f32).filter(|float| float.is_finite()),
+            N::Float(n) => Some(n as f32),
+            N::Infinity => Some(f32::INFINITY),
+            N::NegInfinity => Some(f32::NEG_INFINITY),
+            N::NaN => Some(f32::NAN),
         }
         #[cfg(feature = "arbitrary_precision")]
-        self.n.parse::<f32>().ok().filter(|float| float.is_finite())
+        self.n.parse::<f32>().ok()
     }
 
     pub(crate) fn from_f32(f: f32) -> Option<Number> {
-        if f.is_finite() {
-            let n = {
-                #[cfg(not(feature = "arbitrary_precision"))]
-                {
-                    N::Float(f as f64)
-                }
-                #[cfg(feature = "arbitrary_precision")]
-                {
-                    zmij::Buffer::new().format_finite(f).to_owned()
-                }
-            };
+        #[cfg(not(feature = "arbitrary_precision"))]
+        {
+            let n = if f.is_infinite() {
+                if f > 0.0 {N::Infinity} else {N::NegInfinity}
+            }
+            else if f.is_nan() {N::NaN}
+            else {N::Float(f as f64)};
             Some(Number { n })
-        } else {
+        }
+        #[cfg(feature = "arbitrary_precision")]
+        if f.is_finite() {
+            let n = zmij::Buffer::new().format_finite(f).to_owned();
+            Some(Number { n })
+        }
+        else {
             None
         }
     }
@@ -360,6 +386,9 @@ impl Display for Number {
             N::PosInt(u) => formatter.write_str(itoa::Buffer::new().format(u)),
             N::NegInt(i) => formatter.write_str(itoa::Buffer::new().format(i)),
             N::Float(f) => formatter.write_str(zmij::Buffer::new().format_finite(f)),
+            N::Infinity => formatter.write_str("inf"),
+            N::NegInfinity => formatter.write_str("-inf"),
+            N::NaN => formatter.write_str("nan"),
         }
     }
 
@@ -385,6 +414,9 @@ impl Serialize for Number {
             N::PosInt(u) => serializer.serialize_u64(u),
             N::NegInt(i) => serializer.serialize_i64(i),
             N::Float(f) => serializer.serialize_f64(f),
+            N::Infinity => serializer.serialize_f64(f64::INFINITY),
+            N::NegInfinity => serializer.serialize_f64(f64::NEG_INFINITY),
+            N::NaN => serializer.serialize_f64(f64::NAN),
         }
     }
 
@@ -549,6 +581,9 @@ macro_rules! deserialize_any {
                 N::PosInt(u) => visitor.visit_u64(u),
                 N::NegInt(i) => visitor.visit_i64(i),
                 N::Float(f) => visitor.visit_f64(f),
+                N::Infinity => visitor.visit_f64(f64::INFINITY),
+                N::NegInfinity => visitor.visit_f64(f64::NEG_INFINITY),
+                N::NaN => visitor.visit_f64(f64::NAN),
             }
         }
 
@@ -809,6 +844,9 @@ impl Number {
             N::PosInt(u) => Unexpected::Unsigned(u),
             N::NegInt(i) => Unexpected::Signed(i),
             N::Float(f) => Unexpected::Float(f),
+            N::Infinity => Unexpected::Other("inf"),
+            N::NegInfinity => Unexpected::Other("-inf"),
+            N::NaN => Unexpected::Other("nan"),
         }
     }
 

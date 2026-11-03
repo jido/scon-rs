@@ -1044,10 +1044,10 @@ where
     }
 
     fn serialize_f32(self, value: f32) -> Result<()> {
-        if !value.is_finite() {
+/*        if !value.is_finite() {
             return Err(float_key_must_be_finite());
         }
-
+*/
         tri!(self
             .ser
             .formatter
@@ -1065,10 +1065,10 @@ where
     }
 
     fn serialize_f64(self, value: f64) -> Result<()> {
-        if !value.is_finite() {
+/*        if !value.is_finite() {
             return Err(float_key_must_be_finite());
         }
-
+*/
         tri!(self
             .ser
             .formatter
@@ -1541,11 +1541,11 @@ impl<'a, W: io::Write, F: Formatter> ser::Serializer for RawValueStrEmitter<'a, 
 /// This trait abstracts away serializing the Scon control characters, which allows the user to
 /// optionally pretty print the Scon output.
 pub trait Formatter {
-    /// Prepends a space (b' ') to the formatted number string from an `itoa::Buffer`
+    /// Prepends a space (b' ') to the formatted number string
     /// Returns a new `Vec<u8>` with the space prepended if prepend == true
-    fn prepend_space_to_buffer(buffer: &str, prepend: bool) -> Vec<u8> {
+    fn prepend_space_to_number(numstr: &str, prepend: bool) -> Vec<u8> {
         // Get the current formatted string
-        let original_bytes = buffer.as_bytes();
+        let original_bytes = numstr.as_bytes();
 
         // Create a new buffer with prepended space
         let mut result: Vec<u8>;
@@ -1637,7 +1637,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1648,7 +1648,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1659,7 +1659,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1670,7 +1670,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `-123` to the specified writer.
@@ -1681,7 +1681,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
@@ -1692,7 +1692,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
@@ -1703,7 +1703,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
@@ -1714,7 +1714,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
@@ -1725,7 +1725,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes an integer value like `123` to the specified writer.
@@ -1736,7 +1736,7 @@ pub trait Formatter {
     {
         let mut buffer = itoa::Buffer::new();
         let s = buffer.format(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes a floating point value like `-31.26e+12` to the specified writer.
@@ -1761,7 +1761,7 @@ pub trait Formatter {
     {
         let mut buffer = zmij::Buffer::new();
         let s = buffer.format_finite(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes a floating point value like `-31.26e+12` to the specified writer.
@@ -1786,7 +1786,7 @@ pub trait Formatter {
     {
         let mut buffer = zmij::Buffer::new();
         let s = buffer.format_finite(value);
-        writer.write_all(&Self::prepend_space_to_buffer(s, after_key))
+        writer.write_all(&Self::prepend_space_to_number(s, after_key))
     }
 
     /// Writes a number that has already been rendered to a string.

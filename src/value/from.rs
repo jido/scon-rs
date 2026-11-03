@@ -28,8 +28,7 @@ from_integer! {
 }
 
 impl From<f32> for Value {
-    /// Convert 32-bit floating point number to `Value::Number`, or
-    /// `Value::Null` if infinite or NaN.
+    /// Convert 32-bit floating point number to `Value::Number`
     ///
     /// # Examples
     ///
@@ -40,13 +39,15 @@ impl From<f32> for Value {
     /// let x: Value = f.into();
     /// ```
     fn from(f: f32) -> Self {
-        Number::from_f32(f).map_or(Value::Null, Value::Number)
+        match Number::from_f32(f) {
+            Some(v) => Value::Number(v),
+            None => Value::Null,
+        }
     }
 }
 
 impl From<f64> for Value {
-    /// Convert 64-bit floating point number to `Value::Number`, or
-    /// `Value::Null` if infinite or NaN.
+    /// Convert 64-bit floating point number to `Value::Number`
     ///
     /// # Examples
     ///
@@ -57,7 +58,10 @@ impl From<f64> for Value {
     /// let x: Value = f.into();
     /// ```
     fn from(f: f64) -> Self {
-        Number::from_f64(f).map_or(Value::Null, Value::Number)
+        match Number::from_f64(f) {
+            Some(v) => Value::Number(v),
+            None => Value::Null,
+        }
     }
 }
 

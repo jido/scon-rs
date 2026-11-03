@@ -155,6 +155,9 @@ fn test_write_f64() {
         (f64::MIN, "-1.7976931348623157e+308"),
         (f64::MAX, "1.7976931348623157e+308"),
         (f64::EPSILON, "2.220446049250313e-16"),
+        (f64::INFINITY, "+#"),
+        (f64::NEG_INFINITY, "-#"),
+        (f64::NAN, "?"),
     ];
     test_encode_ok(tests);
     test_pretty_encode_ok(tests);
@@ -335,6 +338,9 @@ fn test_write_object() {
     ]);
 
     test_encode_ok(&[(treemap!['c' => ()], "{c/}")]);
+    test_encode_ok(&[(treemap!['c' => f32::INFINITY], "{c +#}")]);
+    test_encode_ok(&[(treemap!['c' => f32::NEG_INFINITY], "{c -#}")]);
+    test_encode_ok(&[(treemap!['c' => f32::NAN], "{c?}")]);
 
     test_pretty_encode_ok(&[
         (
