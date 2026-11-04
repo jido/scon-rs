@@ -25,7 +25,7 @@ fn assert_invalid_unicode_at(input: &[u8], column: usize) {
 #[test]
 fn invalid_utf8_after_escape_reports_the_bad_byte() {
     // " \" \xCE , \xA3 "
-    assert_invalid_unicode_at(&[b'"', b'\\', b'"', 0xCE, b',', 0xA3, b'"'], 4);
+    assert_invalid_unicode_at(&[b'"', b'\\', b'_', 0xCE, b',', 0xA3, b'"'], 4);
 }
 
 // https://github.com/serde-rs/json/issues/1110

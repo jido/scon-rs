@@ -66,9 +66,9 @@ pub struct Struct {
 
 #[test]
 fn test() {
-    let j = r#" {"i":100} "#;
+    let j = r#"{'i'100} "#;
     println!("{:?}", serde_scon::from_str::<Struct>(j).unwrap());
 
-    let j = r#" {"i":"100"} "#;
+    let j = r#"{'i'"100"} "#;
     println!("{:?}", serde_scon::from_str::<Struct>(j).unwrap());
 }

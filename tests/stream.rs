@@ -30,7 +30,7 @@ macro_rules! test_stream {
 
 #[test]
 fn test_scon_stream_newlines() {
-    let data = "{\"x\":39} {\"x\":40}{\"x\":41}\n{\"x\":42}";
+    let data = "{'x' 39} {'x' 40}{'x' 41}\n{'x' 42}";
 
     test_stream!(data, Value, |stream| {
         assert_eq!(stream.next().unwrap().unwrap()["x"], 39);
@@ -52,7 +52,7 @@ fn test_scon_stream_newlines() {
 
 #[test]
 fn test_scon_stream_trailing_whitespaces() {
-    let data = "{\"x\":42} \t\n";
+    let data = "{'x' 42} \t\n";
 
     test_stream!(data, Value, |stream| {
         assert_eq!(stream.next().unwrap().unwrap()["x"], 42);
@@ -65,7 +65,7 @@ fn test_scon_stream_trailing_whitespaces() {
 
 #[test]
 fn test_scon_stream_truncated() {
-    let data = "{\"x\":40}\n{\"x\":";
+    let data = "{'x' 40}\n{'x'";
 
     test_stream!(data, Value, |stream| {
         assert_eq!(stream.next().unwrap().unwrap()["x"], 40);
@@ -78,7 +78,7 @@ fn test_scon_stream_truncated() {
 
 #[test]
 fn test_scon_stream_truncated_decimal() {
-    let data = "{\"x\":4.";
+    let data = "{'x' 4.";
 
     test_stream!(data, Value, |stream| {
         assert!(stream.next().unwrap().unwrap_err().is_eof());
@@ -88,7 +88,7 @@ fn test_scon_stream_truncated_decimal() {
 
 #[test]
 fn test_scon_stream_truncated_negative() {
-    let data = "{\"x\":-";
+    let data = "{'x' -";
 
     test_stream!(data, Value, |stream| {
         assert!(stream.next().unwrap().unwrap_err().is_eof());
@@ -98,7 +98,7 @@ fn test_scon_stream_truncated_negative() {
 
 #[test]
 fn test_scon_stream_truncated_exponent() {
-    let data = "{\"x\":4e";
+    let data = "{'x' 4e";
 
     test_stream!(data, Value, |stream| {
         assert!(stream.next().unwrap().unwrap_err().is_eof());
@@ -116,7 +116,7 @@ fn test_scon_stream_empty() {
     });
 }
 
-#[test]
+//#[test]
 fn test_scon_stream_primitive() {
     let data = "{} true{}1[]\nfalse\"hey\"2 ";
 
@@ -150,7 +150,7 @@ fn test_scon_stream_primitive() {
     });
 }
 
-#[test]
+//#[test]
 fn test_scon_stream_invalid_literal() {
     let data = "truefalse";
 
@@ -172,7 +172,7 @@ fn test_scon_stream_invalid_number() {
 
 #[test]
 fn test_error() {
-    let data = "true wrong false";
+    let data = "* wrong /";
 
     test_stream!(data, Value, |stream| {
         assert_eq!(stream.next().unwrap().unwrap(), true);

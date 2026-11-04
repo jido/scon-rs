@@ -236,12 +236,12 @@ where
                 continue;
             }
             match ch {
-                b'"' => {
+                b'"' | b'\'' => { //"
                     return result(self, scratch);
                 }
-                b'\\' => {
+/*                b'\\' => {
                     tri!(parse_escape(self, validate, scratch));
-                }
+                }*/
                 _ => {
                     if validate {
                         return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -356,12 +356,12 @@ where
                 continue;
             }
             match ch {
-                b'"' => {
+                b'"' | b'\'' => { //"
                     return Ok(());
                 }
-                b'\\' => {
+/*                b'\\' => {
                     tri!(ignore_escape(self));
-                }
+                }*/
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
                 }
@@ -468,7 +468,7 @@ impl<'a> SliceRead<'a> {
         let rest = &self.slice[self.index..];
 
         if !forbid_control_characters {
-            self.index += memchr::memchr2(b'"', b'\\', rest).unwrap_or(rest.len());
+            self.index += memchr::memchr2(b'"', b'\'', rest).unwrap_or(rest.len()); //"
             return;
         }
 
@@ -490,9 +490,9 @@ impl<'a> SliceRead<'a> {
         for chunk in rest.chunks_exact(STEP) {
             let chars = Chunk::from_le_bytes(chunk.try_into().unwrap());
             let contains_ctrl = chars.wrapping_sub(ONE_BYTES * 0x20) & !chars;
-            let chars_quote = chars ^ (ONE_BYTES * Chunk::from(b'"'));
+            let chars_quote = chars ^ (ONE_BYTES * Chunk::from(b'"')); //"
             let contains_quote = chars_quote.wrapping_sub(ONE_BYTES) & !chars_quote;
-            let chars_backslash = chars ^ (ONE_BYTES * Chunk::from(b'\\'));
+            let chars_backslash = chars ^ (ONE_BYTES * Chunk::from(b'\''));
             let contains_backslash = chars_backslash.wrapping_sub(ONE_BYTES) & !chars_backslash;
             let masked = (contains_ctrl | contains_quote | contains_backslash) & (ONE_BYTES << 7);
             if masked != 0 {
@@ -537,7 +537,7 @@ impl<'a> SliceRead<'a> {
                 return error(self, ErrorCode::EofWhileParsingString);
             }
             match self.slice[self.index] {
-                b'"' => {
+                b'"' | b'\'' => { //"
                     if scratch.is_empty() {
                         // Fast path: return a slice of the raw JSON without any
                         // copying.
@@ -550,12 +550,12 @@ impl<'a> SliceRead<'a> {
                         return result(self, scratch).map(Reference::Copied);
                     }
                 }
-                b'\\' => {
+/*                b'\\' => {
                     scratch.extend_from_slice(&self.slice[start..self.index]);
                     self.index += 1;
                     tri!(parse_escape(self, validate, scratch));
                     start = self.index;
-                }
+                }*/
                 _ => {
                     self.index += 1;
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -629,14 +629,14 @@ impl<'a> Read<'a> for SliceRead<'a> {
                 return error(self, ErrorCode::EofWhileParsingString);
             }
             match self.slice[self.index] {
-                b'"' => {
+                b'"' | b'\'' => { //"
                     self.index += 1;
                     return Ok(());
                 }
-                b'\\' => {
+/*                b'\\' => {
                     self.index += 1;
                     tri!(ignore_escape(self));
-                }
+                }*/
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
                 }
@@ -869,7 +869,7 @@ impl<'a> Fused for SliceRead<'a> {}
 impl<'a> Fused for StrRead<'a> {}
 
 fn is_escape(ch: u8, including_control_characters: bool) -> bool {
-    ch == b'"' || ch == b'\\' || (including_control_characters && ch < 0x20)
+    ch == b'"' || ch == b'\'' || (including_control_characters && ch < 0x20) //"
 }
 
 fn next_or_eof<'de, R>(read: &mut R) -> Result<u8>
@@ -1080,7 +1080,7 @@ where
     let ch = tri!(next_or_eof(read));
 
     match ch {
-        b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {}
+        b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {} //"
         b'u' => {
             // At this point we don't care if the codepoint is valid. We just
             // want to consume it. We don't actually know what is valid or not
