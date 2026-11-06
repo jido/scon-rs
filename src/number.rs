@@ -17,7 +17,7 @@ use serde::{forward_to_deserialize_any, Deserialize, Deserializer, Serialize, Se
 #[cfg(feature = "arbitrary_precision")]
 pub(crate) const TOKEN: &str = "$serde_json::private::Number";
 
-/// Represents a JSON number, whether integer or floating point.
+/// Represents a Scon number, whether integer or floating point.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Number {
     n: N,
@@ -299,14 +299,14 @@ impl Number {
         Some(Number { n })
     }
 
-    /// Returns the JSON representation that this Number was parsed from.
+    /// Returns the Scon representation that this Number was parsed from.
     ///
     /// When parsing with serde_json's `arbitrary_precision` feature enabled,
     /// positive exponents are normalized to include an explicit `+` sign so
     /// that `1e140` becomes `1e+140`.
     ///
     /// For numbers constructed not via parsing, such as by `From<i32>`, returns
-    /// the JSON representation that serde\_json would serialize for this
+    /// the Scon representation that serde\_json would serialize for this
     /// number.
     ///
     /// ```
@@ -443,7 +443,7 @@ impl<'de> Deserialize<'de> for Number {
             type Value = Number;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a JSON number")
+                formatter.write_str("a Scon number")
             }
 
             fn visit_i64<E>(self, value: i64) -> Result<Number, E> {
@@ -455,7 +455,7 @@ impl<'de> Deserialize<'de> for Number {
                 E: de::Error,
             {
                 Number::from_i128(value)
-                    .ok_or_else(|| de::Error::custom("JSON number out of range"))
+                    .ok_or_else(|| de::Error::custom("Scon number out of range"))
             }
 
             fn visit_u64<E>(self, value: u64) -> Result<Number, E> {
@@ -467,14 +467,14 @@ impl<'de> Deserialize<'de> for Number {
                 E: de::Error,
             {
                 Number::from_u128(value)
-                    .ok_or_else(|| de::Error::custom("JSON number out of range"))
+                    .ok_or_else(|| de::Error::custom("Scon number out of range"))
             }
 
             fn visit_f64<E>(self, value: f64) -> Result<Number, E>
             where
                 E: de::Error,
             {
-                Number::from_f64(value).ok_or_else(|| de::Error::custom("not a JSON number"))
+                Number::from_f64(value).ok_or_else(|| de::Error::custom("not a Scon number"))
             }
 
             #[cfg(feature = "arbitrary_precision")]

@@ -116,41 +116,41 @@ fn test_scon_stream_empty() {
     });
 }
 
-//#[test]
+#[test]
 fn test_scon_stream_primitive() {
-    let data = "{} true{}1[]\nfalse\"hey\"2 ";
+    let data = "{} *{}1[]\n~\"hey\"2 ";
 
     test_stream!(data, Value, |stream| {
         assert_eq!(stream.next().unwrap().unwrap(), scon!({}));
         assert_eq!(stream.byte_offset(), 2);
 
         assert_eq!(stream.next().unwrap().unwrap(), true);
-        assert_eq!(stream.byte_offset(), 7);
+        assert_eq!(stream.byte_offset(), data.find('*').unwrap()+1);
 
         assert_eq!(stream.next().unwrap().unwrap(), scon!({}));
-        assert_eq!(stream.byte_offset(), 9);
+        assert_eq!(stream.byte_offset(), data.find('1').unwrap());
 
         assert_eq!(stream.next().unwrap().unwrap(), 1);
-        assert_eq!(stream.byte_offset(), 10);
+        assert_eq!(stream.byte_offset(), data.find('1').unwrap()+1);
 
         assert_eq!(stream.next().unwrap().unwrap(), scon!([]));
-        assert_eq!(stream.byte_offset(), 12);
+        assert_eq!(stream.byte_offset(), data.find('\n').unwrap());
 
         assert_eq!(stream.next().unwrap().unwrap(), false);
-        assert_eq!(stream.byte_offset(), 18);
+        assert_eq!(stream.byte_offset(), data.find('~').unwrap()+1);
 
         assert_eq!(stream.next().unwrap().unwrap(), "hey");
-        assert_eq!(stream.byte_offset(), 23);
+        assert_eq!(stream.byte_offset(), data.find('2').unwrap());
 
         assert_eq!(stream.next().unwrap().unwrap(), 2);
-        assert_eq!(stream.byte_offset(), 24);
+        assert_eq!(stream.byte_offset(), data.find('2').unwrap()+1);
 
         assert!(stream.next().is_none());
-        assert_eq!(stream.byte_offset(), 25);
+        assert_eq!(stream.byte_offset(), data.len());
     });
 }
 
-//#[test]
+/*#[test]
 fn test_scon_stream_invalid_literal() {
     let data = "truefalse";
 
@@ -158,7 +158,7 @@ fn test_scon_stream_invalid_literal() {
         let second = stream.next().unwrap().unwrap_err();
         assert_eq!(second.to_string(), "trailing characters at line 1 column 5");
     });
-}
+}*/
 
 #[test]
 fn test_scon_stream_invalid_number() {

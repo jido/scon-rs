@@ -308,12 +308,9 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             },
             b'+' => {
                 self.eat_char();
-                match self.peek_or_null().unwrap_or(b'\x00') {
-                    b'#' => {
-                        self.eat_char();
-                        ParserNumber::F64(f64::INFINITY).invalid_type(exp)
-                    },
-                    _ => self.peek_error(ErrorCode::ExpectedSomeValue),
+                match self.parse_any_number(false) {
+                    Ok(n) => n.invalid_type(exp),
+                    Err(err) => return err,
                 }
             },
             b'0'..=b'9' => match self.parse_any_number(true) {
@@ -324,6 +321,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 self.eat_char();
                 self.scratch.clear();
                 match self.read.parse_str(&mut self.scratch) {
+                    Ok(s) => de::Error::invalid_type(Unexpected::Str(&s), exp),
+                    Err(err) => return err,
+                }
+            },
+            b'\'' => {
+                self.eat_char();
+                self.scratch.clear();
+                match self.read.parse_key(&mut self.scratch) {
                     Ok(s) => de::Error::invalid_type(Unexpected::Str(&s), exp),
                     Err(err) => return err,
                 }
@@ -358,11 +363,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             b'-' => {
                 self.eat_char();
                 match tri!(self.peek()) {
-                    Some(b'#') => {
-                        self.eat_char();
-                        visitor.visit_f64(f64::NEG_INFINITY)
-                    },
-                    Some(_) => tri!(self.parse_integer(false)).visit(visitor),
+                    Some(_) => tri!(self.parse_integer_or_inf(false)).visit(visitor),
                     None => {
                         return Err(self.peek_error(ErrorCode::EofWhileParsingValue));
                     }
@@ -370,13 +371,8 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             },
             b'+' => {
                 self.eat_char();
-                tri!(self.parse_ident(b"#"));
                 match tri!(self.peek()) {
-                    Some(b'#') => {
-                        self.eat_char();
-                        visitor.visit_f64(f64::INFINITY)
-                    },
-                    Some(_) => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+                    Some(_) => tri!(self.parse_integer_or_inf(true)).visit(visitor),
                     None => {
                         return Err(self.peek_error(ErrorCode::EofWhileParsingValue));
                     }
@@ -507,6 +503,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
 
         Ok(())
+    }
+
+    fn parse_integer_or_inf(&mut self, positive: bool) -> Result<ParserNumber> {
+        if tri!(self.peek_or_null()) == b'#' {
+            Ok(ParserNumber::F64(f64::INFINITY))
+        } else {
+            self.parse_integer(positive)
+        }
     }
 
     fn parse_integer(&mut self, positive: bool) -> Result<ParserNumber> {
@@ -1105,18 +1109,6 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             buf.push(c as char);
         }
 
-        Ok(())
-    }
-
-    fn parse_object_colon(&mut self) -> Result<()> {
-/*        match tri!(self.parse_whitespace()) {
-            Some(b':') => {
-                self.eat_char();
-                Ok(())
-            }
-            Some(_) => Err(self.peek_error(ErrorCode::ExpectedColon)),
-            None => Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
-         }*/
         Ok(())
     }
 
@@ -2037,7 +2029,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        tri!(self.de.parse_object_colon());
+        //tri!(self.de.parse_object_colon());
 
         seed.deserialize(&mut *self.de)
     }
@@ -2071,7 +2063,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::EnumAccess<'de> for VariantAccess<'a, R> {
             Ok(value) => value,
             Err(err) => return Err(self.de.fix_position(err)),
         };
-        tri!(self.de.parse_object_colon());
+        //tri!(self.de.parse_object_colon());
         Ok((val, self))
     }
 }
@@ -2224,11 +2216,21 @@ where
     where
         V: de::Visitor<'de>,
     {
-        self.de.eat_char();
-        self.de.scratch.clear();
-        match tri!(self.de.read.parse_str(&mut self.de.scratch)) {
-            Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
-            Reference::Copied(s) => visitor.visit_str(s),
+        let peek = match tri!(self.de.next_char()) {
+            Some(b) => b,
+            None => {
+                return Err(self.de.peek_error(ErrorCode::EofWhileParsingValue));
+            }
+        };
+        
+        if peek == b'\'' {
+            self.de.scratch.clear();
+            match tri!(self.de.read.parse_key(&mut self.de.scratch)) {
+                Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                Reference::Copied(s) => visitor.visit_str(s),
+            }
+        } else {
+            Err(self.de.error(ErrorCode::KeyMustBeAString))
         }
     }
 
@@ -2252,7 +2254,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        self.de.eat_char();
+        //self.de.eat_char();
 
         let peek = match tri!(self.de.next_char()) {
             Some(b) => b,

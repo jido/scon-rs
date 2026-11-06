@@ -20,9 +20,9 @@ impl<'de> Visitor<'de> for EnumVisitor {
     }
 }
 
-//#[test]
+#[test]
 fn test() {
-    let mut de = serde_scon::Deserializer::from_str("{[true]: null}");
+    let mut de = serde_scon::Deserializer::from_str("{[]/}");
     let err = de.deserialize_enum("name", &[], EnumVisitor).unwrap_err();
 
     assert!(err.to_string().contains("key must be a string"));

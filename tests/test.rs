@@ -705,14 +705,14 @@ where
 }
 
 #[test]
-fn test_parse_null() {
+fn test_parse_unended() {
     test_parse_err::<()>(&[
-        ("n", "EOF while parsing a value at line 1 column 1"),
-        ("nul", "EOF while parsing a value at line 1 column 3"),
-        ("nulla", "trailing characters at line 1 column 5"),
+        ("\"", "EOF while parsing a value at line 1 column 1"),
+        ("\"\"\"", "EOF while parsing a value at line 1 column 3"),
+        ("\"ab\"c", "trailing characters at line 1 column 5"),
     ]);
 
-    test_parse_ok(vec![("null", ())]);
+    test_parse_ok(vec![("\"ab\"\"c\"", "ab\"c".to_owned())]);
 }
 
 #[test]

@@ -1,7 +1,6 @@
 use crate::error::{Error, ErrorCode, Result};
 use alloc::vec::Vec;
 use core::cmp;
-use core::mem;
 use core::ops::Deref;
 use core::str;
 
@@ -66,6 +65,12 @@ pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>>;
 
+    /// Assumes the previous byte was a single quote. Parses a JSON-escaped
+    /// string until the next single quote using the given scratch space if
+    /// necessary. The scratch space is initially empty.
+    #[doc(hidden)]
+    fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>>;
+
     /// Assumes the previous byte was a quotation mark. Parses a JSON-escaped
     /// string until the next quotation mark using the given scratch space if
     /// necessary. The scratch space is initially empty.
@@ -83,10 +88,10 @@ pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn ignore_str(&mut self) -> Result<()>;
 
-    /// Assumes the previous byte was a hex escape sequence ('\u') in a string.
-    /// Parses next hexadecimal sequence.
+    /// Assumes the previous byte was a single quote. Parses a Scon-escaped
+    /// string until the next single quote but discards the data.
     #[doc(hidden)]
-    fn decode_hex_escape(&mut self) -> Result<u16>;
+    fn ignore_key(&mut self) -> Result<()>;
 
     /// Switch raw buffering mode on.
     ///
@@ -222,7 +227,7 @@ where
     fn parse_str_bytes<'s, T, F>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
-        validate: bool,
+        quote: u8,
         result: F,
     ) -> Result<T>
     where
@@ -231,24 +236,17 @@ where
     {
         loop {
             let ch = tri!(next_or_eof(self));
-            if !is_escape(ch, true) {
+            if ch != quote {
                 scratch.push(ch);
                 continue;
             }
-            match ch {
-                b'"' | b'\'' => { //"
-                    return result(self, scratch);
-                }
-/*                b'\\' => {
-                    tri!(parse_escape(self, validate, scratch));
-                }*/
-                _ => {
-                    if validate {
-                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
-                    }
-                    scratch.push(ch);
+            if ch == quote {
+                match tri!(self.peek()) {
+                    Some(q) if q == quote => _ = self.next(),
+                    _ => return result(self, scratch),
                 }
             }
+            scratch.push(ch);
         }
     }
 }
@@ -337,7 +335,12 @@ where
     }
 
     fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        self.parse_str_bytes(scratch, true, as_str)
+        self.parse_str_bytes(scratch, b'"', as_str) //"
+            .map(Reference::Copied)
+    }
+
+    fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
+        self.parse_str_bytes(scratch, b'\'', as_str)
             .map(Reference::Copied)
     }
 
@@ -345,38 +348,31 @@ where
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'de, 's, [u8]>> {
-        self.parse_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+        self.parse_str_bytes(scratch, b'"', |_, bytes| Ok(bytes)) //"
             .map(Reference::Copied)
     }
 
     fn ignore_str(&mut self) -> Result<()> {
         loop {
             let ch = tri!(next_or_eof(self));
-            if !is_escape(ch, true) {
-                continue;
-            }
-            match ch {
-                b'"' | b'\'' => { //"
-                    return Ok(());
-                }
-/*                b'\\' => {
-                    tri!(ignore_escape(self));
-                }*/
-                _ => {
-                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+            if ch == b'"' {
+                match tri!(self.peek()) {
+                    Some(b'"') => _ = self.next(),
+                    _ => return Ok(()),
                 }
             }
         }
     }
 
-    fn decode_hex_escape(&mut self) -> Result<u16> {
-        let a = tri!(next_or_eof(self));
-        let b = tri!(next_or_eof(self));
-        let c = tri!(next_or_eof(self));
-        let d = tri!(next_or_eof(self));
-        match decode_four_hex_digits(a, b, c, d) {
-            Some(val) => Ok(val),
-            None => error(self, ErrorCode::InvalidEscape),
+    fn ignore_key(&mut self) -> Result<()> {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if ch == b'\'' {
+                match tri!(self.peek()) {
+                    Some(b'\'') => _ = self.next(),
+                    _ => return Ok(()),
+                }
+            }
         }
     }
 
@@ -456,72 +452,25 @@ impl<'a> SliceRead<'a> {
         }
     }
 
-    fn skip_to_escape(&mut self, forbid_control_characters: bool) {
-        // Immediately bail-out on empty strings and consecutive escapes (e.g. \u041b\u0435)
-        if self.index == self.slice.len()
-            || is_escape(self.slice[self.index], forbid_control_characters)
-        {
-            return;
-        }
-        self.index += 1;
-
-        let rest = &self.slice[self.index..];
-
-        if !forbid_control_characters {
-            self.index += memchr::memchr2(b'"', b'\'', rest).unwrap_or(rest.len()); //"
+    fn skip_to_quote(&mut self, quote: u8) {
+        // Immediately bail-out on empty strings
+        if self.index == self.slice.len() {
             return;
         }
 
-        // We wish to find the first byte in range 0x00..=0x1F or " or \. Ideally, we'd use
-        // something akin to memchr3, but the memchr crate does not support this at the moment.
-        // Therefore, we use a variation on Mycroft's algorithm [1] to provide performance better
-        // than a naive loop. It runs faster than equivalent two-pass memchr2+SWAR code on
-        // benchmarks and it's cross-platform, so probably the right fit.
-        // [1]: https://groups.google.com/forum/#!original/comp.lang.c/2HtQXvg7iKc/xOJeipH6KLMJ
-
-        #[cfg(fast_arithmetic = "64")]
-        type Chunk = u64;
-        #[cfg(fast_arithmetic = "32")]
-        type Chunk = u32;
-
-        const STEP: usize = mem::size_of::<Chunk>();
-        const ONE_BYTES: Chunk = Chunk::MAX / 255; // 0x0101...01
-
-        for chunk in rest.chunks_exact(STEP) {
-            let chars = Chunk::from_le_bytes(chunk.try_into().unwrap());
-            let contains_ctrl = chars.wrapping_sub(ONE_BYTES * 0x20) & !chars;
-            let chars_quote = chars ^ (ONE_BYTES * Chunk::from(b'"')); //"
-            let contains_quote = chars_quote.wrapping_sub(ONE_BYTES) & !chars_quote;
-            let chars_backslash = chars ^ (ONE_BYTES * Chunk::from(b'\''));
-            let contains_backslash = chars_backslash.wrapping_sub(ONE_BYTES) & !chars_backslash;
-            let masked = (contains_ctrl | contains_quote | contains_backslash) & (ONE_BYTES << 7);
-            if masked != 0 {
-                // SAFETY: chunk is in-bounds for slice
-                self.index = unsafe { chunk.as_ptr().offset_from(self.slice.as_ptr()) } as usize
-                    + masked.trailing_zeros() as usize / 8;
-                return;
-            }
-        }
-
-        self.index += rest.len() / STEP * STEP;
-        self.skip_to_escape_slow();
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn skip_to_escape_slow(&mut self) {
-        while self.index < self.slice.len() && !is_escape(self.slice[self.index], true) {
-            self.index += 1;
+        match memchr::memchr(quote, &self.slice[self.index..]) {
+            Some(len) => self.index += len,
+            None => self.index = self.slice.len(),
         }
     }
 
     /// The big optimization here over IoRead is that if the string contains no
-    /// backslash escape sequences, the returned &str is a slice of the raw JSON
+    /// backslash escape sequences, the returned &str is a slice of the raw Scon
     /// data so we avoid copying into the scratch space.
     fn parse_str_bytes<'s, T, F>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
-        validate: bool,
+        quote: u8,
         result: F,
     ) -> Result<Reference<'a, 's, T>>
     where
@@ -529,37 +478,28 @@ impl<'a> SliceRead<'a> {
         F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
     {
         // Index of the first byte not yet copied into the scratch space.
-        let mut start = self.index;
+        let start = self.index;
 
         loop {
-            self.skip_to_escape(validate);
+            self.skip_to_quote(quote);
             if self.index == self.slice.len() {
                 return error(self, ErrorCode::EofWhileParsingString);
             }
-            match self.slice[self.index] {
-                b'"' | b'\'' => { //"
-                    if scratch.is_empty() {
-                        // Fast path: return a slice of the raw JSON without any
-                        // copying.
-                        let borrowed = &self.slice[start..self.index];
-                        self.index += 1;
-                        return result(self, borrowed).map(Reference::Borrowed);
-                    } else {
-                        scratch.extend_from_slice(&self.slice[start..self.index]);
-                        self.index += 1;
-                        return result(self, scratch).map(Reference::Copied);
-                    }
-                }
-/*                b'\\' => {
+            if self.index + 1 == self.slice.len() || self.slice[self.index + 1] != quote {
+                if scratch.is_empty() {
+                    // Fast path: return a slice of the raw Scon without any
+                    // copying.
+                    let borrowed = &self.slice[start..self.index];
+                    self.index += 1;
+                    return result(self, borrowed).map(Reference::Borrowed);
+                } else {
                     scratch.extend_from_slice(&self.slice[start..self.index]);
                     self.index += 1;
-                    tri!(parse_escape(self, validate, scratch));
-                    start = self.index;
-                }*/
-                _ => {
-                    self.index += 1;
-                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    return result(self, scratch).map(Reference::Copied);
                 }
+            } else {
+                scratch.extend_from_slice(&self.slice[start..=self.index]);
+                self.index += 2;
             }
         }
     }
@@ -612,52 +552,45 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.parse_str_bytes(scratch, true, as_str)
+        self.parse_str_bytes(scratch, b'"', as_str) //"
+    }
+
+    fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
+        self.parse_str_bytes(scratch, b'\'', as_str)
     }
 
     fn parse_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'a, 's, [u8]>> {
-        self.parse_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+        self.parse_str_bytes(scratch, b'"', |_, bytes| Ok(bytes)) //"
     }
-
+    
     fn ignore_str(&mut self) -> Result<()> {
         loop {
-            self.skip_to_escape(true);
+            self.skip_to_quote(b'"'); //"
             if self.index == self.slice.len() {
                 return error(self, ErrorCode::EofWhileParsingString);
             }
-            match self.slice[self.index] {
-                b'"' | b'\'' => { //"
-                    self.index += 1;
-                    return Ok(());
-                }
-/*                b'\\' => {
-                    self.index += 1;
-                    tri!(ignore_escape(self));
-                }*/
-                _ => {
-                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
-                }
+            self.index += 1;
+            if self.index == self.slice.len() || self.slice[self.index] != b'"' { // " not doubled
+                return Ok(());
             }
+            self.index += 1;
         }
     }
 
-    #[inline]
-    fn decode_hex_escape(&mut self) -> Result<u16> {
-        match self.slice[self.index..] {
-            [a, b, c, d, ..] => {
-                self.index += 4;
-                match decode_four_hex_digits(a, b, c, d) {
-                    Some(val) => Ok(val),
-                    None => error(self, ErrorCode::InvalidEscape),
-                }
+    fn ignore_key(&mut self) -> Result<()> {
+        loop {
+            self.skip_to_quote(b'\'');
+            if self.index == self.slice.len() {
+                return error(self, ErrorCode::EofWhileParsingString);
             }
-            _ => {
-                self.index = self.slice.len();
-                error(self, ErrorCode::EofWhileParsingString)
+            self.index += 1;
+            if self.index == self.slice.len() || self.slice[self.index] != b'\'' { // ' not doubled
+                return Ok(());
             }
+            self.index += 1;
         }
     }
 
@@ -742,10 +675,15 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.delegate.parse_str_bytes(scratch, true, |_, bytes| {
+        self.delegate.parse_str_bytes(scratch, b'"', |_, bytes| { //"
+            // The deserialization input came in as &str with a UTF-8 guarantee
+            Ok(unsafe { str::from_utf8_unchecked(bytes) })
+        })
+    }
+
+    fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
+        self.delegate.parse_str_bytes(scratch, b'\'', |_, bytes| {
             // The deserialization input came in as &str with a UTF-8 guarantee,
-            // and the \u-escapes are checked along the way, so don't need to
-            // check here.
             Ok(unsafe { str::from_utf8_unchecked(bytes) })
         })
     }
@@ -761,8 +699,8 @@ impl<'a> Read<'a> for StrRead<'a> {
         self.delegate.ignore_str()
     }
 
-    fn decode_hex_escape(&mut self) -> Result<u16> {
-        self.delegate.decode_hex_escape()
+    fn ignore_key(&mut self) -> Result<()> {
+        self.delegate.ignore_key()
     }
 
     #[cfg(feature = "raw_value")]
@@ -826,6 +764,10 @@ where
         R::parse_str(self, scratch)
     }
 
+    fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
+        R::parse_key(self, scratch)
+    }
+
     fn parse_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
@@ -837,8 +779,8 @@ where
         R::ignore_str(self)
     }
 
-    fn decode_hex_escape(&mut self) -> Result<u16> {
-        R::decode_hex_escape(self)
+    fn ignore_key(&mut self) -> Result<()> {
+        R::ignore_key(self)
     }
 
     #[cfg(feature = "raw_value")]
@@ -867,10 +809,6 @@ where
 pub trait Fused: private::Sealed {}
 impl<'a> Fused for SliceRead<'a> {}
 impl<'a> Fused for StrRead<'a> {}
-
-fn is_escape(ch: u8, including_control_characters: bool) -> bool {
-    ch == b'"' || ch == b'\'' || (including_control_characters && ch < 0x20) //"
-}
 
 fn next_or_eof<'de, R>(read: &mut R) -> Result<u8>
 where
@@ -917,224 +855,5 @@ fn as_str<'de, 's, R: Read<'de>>(read: &R, slice: &'s [u8]) -> Result<&'s str> {
                     .saturating_sub(slice.len() - err.valid_up_to()),
             ))
         }
-    }
-}
-
-/// Parses a JSON escape sequence and appends it into the scratch space. Assumes
-/// the previous byte read was a backslash.
-fn parse_escape<'de, R: Read<'de>>(
-    read: &mut R,
-    validate: bool,
-    scratch: &mut Vec<u8>,
-) -> Result<()> {
-    let ch = tri!(next_or_eof(read));
-
-    match ch {
-        b'"' => scratch.push(b'"'),
-        b'\\' => scratch.push(b'\\'),
-        b'/' => scratch.push(b'/'),
-        b'b' => scratch.push(b'\x08'),
-        b'f' => scratch.push(b'\x0c'),
-        b'n' => scratch.push(b'\n'),
-        b'r' => scratch.push(b'\r'),
-        b't' => scratch.push(b'\t'),
-        b'u' => return parse_unicode_escape(read, validate, scratch),
-        _ => return error(read, ErrorCode::InvalidEscape),
-    }
-
-    Ok(())
-}
-
-/// Parses a JSON \u escape and appends it into the scratch space. Assumes `\u`
-/// has just been read.
-#[cold]
-fn parse_unicode_escape<'de, R: Read<'de>>(
-    read: &mut R,
-    validate: bool,
-    scratch: &mut Vec<u8>,
-) -> Result<()> {
-    let mut n = tri!(read.decode_hex_escape());
-
-    // Non-BMP characters are encoded as a sequence of two hex escapes,
-    // representing UTF-16 surrogates. If deserializing a utf-8 string the
-    // surrogates are required to be paired, whereas deserializing a byte string
-    // accepts lone surrogates.
-    if validate && n >= 0xDC00 && n <= 0xDFFF {
-        // XXX: This is actually a trailing surrogate.
-        return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
-    }
-
-    loop {
-        if n < 0xD800 || n > 0xDBFF {
-            // Every u16 outside of the surrogate ranges is guaranteed to be a
-            // legal char.
-            push_wtf8_codepoint(n as u32, scratch);
-            return Ok(());
-        }
-
-        // n is a leading surrogate, we now expect a trailing surrogate.
-        let n1 = n;
-
-        if tri!(peek_or_eof(read)) == b'\\' {
-            read.discard();
-        } else {
-            return if validate {
-                read.discard();
-                error(read, ErrorCode::UnexpectedEndOfHexEscape)
-            } else {
-                push_wtf8_codepoint(n1 as u32, scratch);
-                Ok(())
-            };
-        }
-
-        if tri!(peek_or_eof(read)) == b'u' {
-            read.discard();
-        } else {
-            return if validate {
-                read.discard();
-                error(read, ErrorCode::UnexpectedEndOfHexEscape)
-            } else {
-                push_wtf8_codepoint(n1 as u32, scratch);
-                // The \ prior to this byte started an escape sequence, so we
-                // need to parse that now. This recursive call does not blow the
-                // stack on malicious input because the escape is not \u, so it
-                // will be handled by one of the easy nonrecursive cases.
-                parse_escape(read, validate, scratch)
-            };
-        }
-
-        let n2 = tri!(read.decode_hex_escape());
-
-        if n2 < 0xDC00 || n2 > 0xDFFF {
-            if validate {
-                return error(read, ErrorCode::LoneLeadingSurrogateInHexEscape);
-            }
-            push_wtf8_codepoint(n1 as u32, scratch);
-            // If n2 is a leading surrogate, we need to restart.
-            n = n2;
-            continue;
-        }
-
-        // This value is in range U+10000..=U+10FFFF, which is always a valid
-        // codepoint.
-        let n = ((((n1 - 0xD800) as u32) << 10) | (n2 - 0xDC00) as u32) + 0x1_0000;
-        push_wtf8_codepoint(n, scratch);
-        return Ok(());
-    }
-}
-
-/// Adds a WTF-8 codepoint to the end of the buffer. This is a more efficient
-/// implementation of String::push. The codepoint may be a surrogate.
-#[inline]
-fn push_wtf8_codepoint(n: u32, scratch: &mut Vec<u8>) {
-    if n < 0x80 {
-        scratch.push(n as u8);
-        return;
-    }
-
-    scratch.reserve(4);
-
-    // SAFETY: After the `reserve` call, `scratch` has at least 4 bytes of
-    // allocated but uninitialized memory after its last initialized byte, which
-    // is where `ptr` points. All reachable match arms write `encoded_len` bytes
-    // to that region and update the length accordingly, and `encoded_len` is
-    // always <= 4.
-    unsafe {
-        let ptr = scratch.as_mut_ptr().add(scratch.len());
-
-        let encoded_len = match n {
-            0..=0x7F => unreachable!(),
-            0x80..=0x7FF => {
-                ptr.write(((n >> 6) & 0b0001_1111) as u8 | 0b1100_0000);
-                2
-            }
-            0x800..=0xFFFF => {
-                ptr.write(((n >> 12) & 0b0000_1111) as u8 | 0b1110_0000);
-                ptr.add(1)
-                    .write(((n >> 6) & 0b0011_1111) as u8 | 0b1000_0000);
-                3
-            }
-            0x1_0000..=0x10_FFFF => {
-                ptr.write(((n >> 18) & 0b0000_0111) as u8 | 0b1111_0000);
-                ptr.add(1)
-                    .write(((n >> 12) & 0b0011_1111) as u8 | 0b1000_0000);
-                ptr.add(2)
-                    .write(((n >> 6) & 0b0011_1111) as u8 | 0b1000_0000);
-                4
-            }
-            0x11_0000.. => unreachable!(),
-        };
-        ptr.add(encoded_len - 1)
-            .write((n & 0b0011_1111) as u8 | 0b1000_0000);
-
-        scratch.set_len(scratch.len() + encoded_len);
-    }
-}
-
-/// Parses a JSON escape sequence and discards the value. Assumes the previous
-/// byte read was a backslash.
-fn ignore_escape<'de, R>(read: &mut R) -> Result<()>
-where
-    R: ?Sized + Read<'de>,
-{
-    let ch = tri!(next_or_eof(read));
-
-    match ch {
-        b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {} //"
-        b'u' => {
-            // At this point we don't care if the codepoint is valid. We just
-            // want to consume it. We don't actually know what is valid or not
-            // at this point, because that depends on if this string will
-            // ultimately be parsed into a string or a byte buffer in the "real"
-            // parse.
-
-            tri!(read.decode_hex_escape());
-        }
-        _ => {
-            return error(read, ErrorCode::InvalidEscape);
-        }
-    }
-
-    Ok(())
-}
-
-const fn decode_hex_val_slow(val: u8) -> Option<u8> {
-    match val {
-        b'0'..=b'9' => Some(val - b'0'),
-        b'A'..=b'F' => Some(val - b'A' + 10),
-        b'a'..=b'f' => Some(val - b'a' + 10),
-        _ => None,
-    }
-}
-
-const fn build_hex_table(shift: usize) -> [i16; 256] {
-    let mut table = [0; 256];
-    let mut ch = 0;
-    while ch < 256 {
-        table[ch] = match decode_hex_val_slow(ch as u8) {
-            Some(val) => (val as i16) << shift,
-            None => -1,
-        };
-        ch += 1;
-    }
-    table
-}
-
-static HEX0: [i16; 256] = build_hex_table(0);
-static HEX1: [i16; 256] = build_hex_table(4);
-
-fn decode_four_hex_digits(a: u8, b: u8, c: u8, d: u8) -> Option<u16> {
-    let a = HEX1[a as usize] as i32;
-    let b = HEX0[b as usize] as i32;
-    let c = HEX1[c as usize] as i32;
-    let d = HEX0[d as usize] as i32;
-
-    let codepoint = ((a | b) << 8) | c | d;
-
-    // A single sign bit check.
-    if codepoint >= 0 {
-        Some(codepoint as u16)
-    } else {
-        None
     }
 }
