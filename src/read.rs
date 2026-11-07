@@ -272,8 +272,12 @@ where
         loop {
             let ch = tri!(next_or_eof(self));
             match ch {
-                b' ' | b']' | b'}' | b',' => {
+                b' ' | b'\t' | b'\r' | b'\n' | b']' | b'}' | b',' => {
+                    self.ch = Some(ch); // push char back
                     return result(self, scratch);
+                }
+                0..b' ' | b'\x7F' => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
                 }
                 _ => {
                     scratch.push(ch);
@@ -299,7 +303,11 @@ where
                 }
                 b' ' | b'*' | b'~' | b'/' | b'?' | b'"' | b'^' | //"
                 b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
+                    self.ch = Some(ch); // push char back
                     return result(self, scratch);
+                }
+                0..b' ' | b'\x7F' => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
                 }
                 _ => {
                     scratch.push(ch);
@@ -587,7 +595,7 @@ impl<'a> SliceRead<'a> {
 
         while self.index < self.slice.len() {
             match self.slice[self.index] {
-                0..=b' ' | b'}' | b']' | b',' => {
+                0..=b' ' | b'\x7F' | b'}' | b']' | b',' => {
                     break;
                 }
                 _ => {
@@ -615,7 +623,7 @@ impl<'a> SliceRead<'a> {
 
         while self.index < self.slice.len() {
             match self.slice[self.index] {
-                0..=b' ' | b':' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
+                0..=b' ' | b'\x7F' | b':' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
                 b'^' | b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
                     break;
                 }
