@@ -301,14 +301,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             }
             b'-' => {
                 self.eat_char();
-                match self.parse_any_number(false) {
+                match self.parse_any_number_or_inf(false) {
                     Ok(n) => n.invalid_type(exp),
                     Err(err) => return err,
                 }
             },
             b'+' => {
                 self.eat_char();
-                match self.parse_any_number(false) {
+                match self.parse_any_number_or_inf(true) {
                     Ok(n) => n.invalid_type(exp),
                     Err(err) => return err,
                 }
@@ -353,7 +353,8 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     where
         V: de::Visitor<'any>,
     {
-        let peek = match tri!(self.peek()) {    // no whitespace
+        _ = tri!(self.parse_whitespace());
+        let peek = match tri!(self.peek()) {
             Some(b) => b,
             None => {
                 return Err(self.peek_error(ErrorCode::EofWhileParsingValue));
@@ -961,7 +962,11 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         let value = match peek {
             b'-' => {
                 self.eat_char();
-                self.parse_any_number(false)
+                self.parse_any_number_or_inf(false)
+            }
+            b'+' => {
+                self.eat_char();
+                self.parse_any_number_or_inf(true)
             }
             b'0'..=b'9' => self.parse_any_number(true),
             _ => Err(self.peek_error(ErrorCode::InvalidNumber)),
@@ -986,6 +991,11 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     #[cfg(not(feature = "arbitrary_precision"))]
     fn parse_any_number(&mut self, positive: bool) -> Result<ParserNumber> {
         self.parse_integer(positive)
+    }
+
+    #[cfg(not(feature = "arbitrary_precision"))]
+    fn parse_any_number_or_inf(&mut self, positive: bool) -> Result<ParserNumber> {
+        self.parse_integer_or_inf(positive)
     }
 
     #[cfg(feature = "arbitrary_precision")]
@@ -1464,13 +1474,25 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
             }
             b'-' => {
                 self.eat_char();
-                tri!(self.parse_any_number(false)).visit(visitor)
+                tri!(self.parse_any_number_or_inf(false)).visit(visitor)
+            }
+            b'+' => {
+                self.eat_char();
+                tri!(self.parse_any_number_or_inf(true)).visit(visitor)
             }
             b'0'..=b'9' => tri!(self.parse_any_number(true)).visit(visitor),
             b'"' => {   //"
                 self.eat_char();
                 self.scratch.clear();
                 match tri!(self.read.parse_str(&mut self.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
+            b'`' => {
+                self.eat_char();
+                self.scratch.clear();
+                match tri!(self.read.parse_bare_str(&mut self.scratch)) {
                     Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
                     Reference::Copied(s) => visitor.visit_str(s),
                 }
@@ -1576,7 +1598,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
         };
 
         let value = match peek {
-            b'"' | b'\'' => {   //"
+            b'"' => {   //"
                 self.eat_char();
                 self.scratch.clear();
                 match tri!(self.read.parse_str(&mut self.scratch)) {
@@ -1643,7 +1665,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
         };
 
         let value = match peek {
-            b'"' | b'\'' => {   //"
+            b'"' => {   //"
                 self.eat_char();
                 self.scratch.clear();
                 match tri!(self.read.parse_str_raw(&mut self.scratch)) {
@@ -2030,8 +2052,29 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
         V: de::DeserializeSeed<'de>,
     {
         //tri!(self.de.parse_object_colon());
-
-        seed.deserialize(&mut *self.de)
+        match self.de.peek() {
+            Ok(Some(b' ')) => {
+                // Space before a number or bare string
+                self.de.eat_char();
+                match self.de.peek() {
+                    Ok(Some(b'-' | b'+' | b'0'..=b'9')) => {
+                        seed.deserialize(&mut *self.de)
+                    }
+                    Ok(Some(b'.' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
+                    b'^' | b'<' | b'{' | b'[' | b'`')) => {
+                        Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
+                    }
+                    Ok(Some(_)) => {
+                        seed.deserialize(&mut *self.de)
+                    }
+                    _ => {
+                        Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
+                    }
+                }
+            },
+            Ok(_) => seed.deserialize(&mut *self.de),
+            Err(_) => Err(self.de.peek_error(ErrorCode::ExpectedSomeValue)),
+        }
     }
 }
 
@@ -2190,7 +2233,7 @@ macro_rules! deserialize_numeric_key {
 
             match tri!(self.de.peek()) {
                 Some(b'\'') => self.de.eat_char(),
-                _ => return Err(self.de.peek_error(ErrorCode::ExpectedDoubleQuote)),
+                _ => return Err(self.de.peek_error(ErrorCode::ExpectedSingleQuote)),
             }
 
             Ok(value)
@@ -2216,21 +2259,34 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let peek = match tri!(self.de.next_char()) {
+        let peek = match tri!(self.de.peek()) {
             Some(b) => b,
             None => {
                 return Err(self.de.peek_error(ErrorCode::EofWhileParsingValue));
             }
         };
         
-        if peek == b'\'' {
-            self.de.scratch.clear();
-            match tri!(self.de.read.parse_key(&mut self.de.scratch)) {
-                Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
-                Reference::Copied(s) => visitor.visit_str(s),
+        match peek {
+            b'\'' => {
+                self.de.eat_char();
+                self.de.scratch.clear();
+                match tri!(self.de.read.parse_key(&mut self.de.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
             }
-        } else {
-            Err(self.de.error(ErrorCode::KeyMustBeAString))
+            b'.' | b'0'..=b'9' | b'+' | b'-' |
+            b'*' | b'~' | b'?' | b'/' | b'[' | b'{' | b'"' => { //"
+                _ = self.de.ignore_value();
+                Err(self.de.error(ErrorCode::KeyMustBeAString))
+            }
+            _ => {
+                self.de.scratch.clear();
+                match tri!(self.de.read.parse_bare_key(&mut self.de.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
         }
     }
 

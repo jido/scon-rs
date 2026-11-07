@@ -1044,10 +1044,10 @@ where
     }
 
     fn serialize_f32(self, value: f32) -> Result<()> {
-/*        if !value.is_finite() {
+        if !value.is_finite() {
             return Err(float_key_must_be_finite());
         }
-*/
+        
         tri!(self
             .ser
             .formatter
@@ -1065,10 +1065,10 @@ where
     }
 
     fn serialize_f64(self, value: f64) -> Result<()> {
-/*        if !value.is_finite() {
+        if !value.is_finite() {
             return Err(float_key_must_be_finite());
         }
-*/
+
         tri!(self
             .ser
             .formatter
