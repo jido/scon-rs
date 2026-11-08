@@ -11,7 +11,7 @@ serde_scon = "0.0.1"
 
 You may be looking for:
 
-- [JSON API documentation](https://docs.rs/serde_json)
+- [Serde JSON API documentation](https://docs.rs/serde_json)
 - [Serde API documentation](https://docs.rs/serde)
 - [Detailed documentation about Serde](https://serde.rs/)
 - [Setting up `#[derive(Serialize, Deserialize)]`](https://serde.rs/derive.html)
@@ -346,7 +346,7 @@ enable the "alloc" feature:
 
 ```toml
 [dependencies]
-serde_scon = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_scon = { version = "0.0.1", default-features = false, features = ["alloc"] }
 ```
 
 For Scon support in Serde without a memory allocator, please see the
@@ -365,16 +365,12 @@ For Scon support in Serde without a memory allocator, please see the
 
 <br>
 
-#### License
+### License
 
-<sup>
 Licensed under <a href="LICENSE-MIT">MIT license</a>.
-</sup>
 
 <br>
 
-<sub>
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this crate by you, shall
 be licensed as above, without any additional terms or conditions.
-</sub>
