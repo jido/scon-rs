@@ -1,9 +1,4 @@
-# Serde JSON &emsp; [![Build Status]][actions] [![Latest Version]][crates.io]
-
-[Build Status]: https://img.shields.io/github/actions/workflow/status/serde-rs/json/ci.yml?branch=master
-[actions]: https://github.com/serde-rs/json/actions?query=branch%3Amaster
-[Latest Version]: https://img.shields.io/crates/v/serde_json.svg
-[crates.io]: https://crates.io/crates/serde\_json
+# Serde Scon
 
 **Serde is a framework for *ser*ializing and *de*serializing Rust data structures efficiently and generically.**
 
@@ -11,7 +6,7 @@
 
 ```toml
 [dependencies]
-serde_json = "1.0"
+serde_scon = "0.0.1"
 ```
 
 You may be looking for:
@@ -22,44 +17,44 @@ You may be looking for:
 - [Setting up `#[derive(Serialize, Deserialize)]`](https://serde.rs/derive.html)
 - [Release notes](https://github.com/serde-rs/json/releases)
 
-JSON is a ubiquitous open-standard format that uses human-readable text to
+Scon is a new format derived from JSON that uses human-readable text to
 transmit data objects consisting of key-value pairs.
 
-```json
+```go
 {
-    "name": "John Doe",
-    "age": 43,
-    "address": {
-        "street": "10 Downing Street",
-        "city": "London"
-    },
-    "phones": [
-        "+44 1234567",
+    name"John Doe"
+    age 43
+    address{
+        street"10 Downing Street"
+        city London
+    }
+    phones[
+        "+44 1234567"
         "+44 2345678"
     ]
 }
 ```
 
 There are three common ways that you might find yourself needing to work with
-JSON data in Rust.
+Scon data in Rust.
 
- - **As text data.** An unprocessed string of JSON data that you receive on an
+ - **As text data.** An unprocessed string of Scon data that you receive on an
    HTTP endpoint, read from a file, or prepare to send to a remote server.
  - **As an untyped or loosely typed representation.** Maybe you want to check
-   that some JSON data is valid before passing it on, but without knowing the
+   that some Scon data is valid before passing it on, but without knowing the
    structure of what it contains. Or you want to do very basic manipulations
    like insert a key in a particular spot.
  - **As a strongly typed Rust data structure.** When you expect all or most of
    your data to conform to a particular structure and want to get real work done
-   without JSON's loosey-goosey nature tripping you up.
+   without Scon's loose nature tripping you up.
 
-Serde JSON provides efficient, flexible, safe ways of converting data between
+Serde Scon provides efficient, flexible, safe ways of converting data between
 each of these representations.
 
-## Operating on untyped JSON values
+## Operating on untyped Scon values
 
-Any valid JSON data can be manipulated in the following recursive enum
-representation. This data structure is [`serde_json::Value`][value].
+Any valid Scon data can be manipulated in the following recursive enum
+representation. This data structure is [`serde_scon::Value`][value].
 
 ```rust
 enum Value {
@@ -72,8 +67,8 @@ enum Value {
 }
 ```
 
-A string of JSON data can be parsed into a `serde_json::Value` by the
-[`serde_json::from_str`][from_str] function. There is also
+A string of Scon data can be parsed into a `serde_scon::Value` by the
+[`serde_scon::from_str`][from_str] function. There is also
 [`from_slice`][from_slice] for parsing from a byte slice `&[u8]` and
 [`from_reader`][from_reader] for parsing from any `io::Read` like a File or a
 TCP stream.
@@ -85,22 +80,21 @@ TCP stream.
 </div>
 
 ```rust
-use serde_json::{Result, Value};
+use serde_scon::{Result, Value};
 
 fn untyped_example() -> Result<()> {
-    // Some JSON input data as a &str. Maybe this comes from the user.
-    let data = r#"
-        {
-            "name": "John Doe",
-            "age": 43,
-            "phones": [
-                "+44 1234567",
+    // Some Scon input data as a &str. Maybe this comes from the user.
+    let data = r#"{
+            name"John Doe"
+            age 43
+            phones[
+                "+44 1234567"
                 "+44 2345678"
             ]
         }"#;
 
-    // Parse the string of data into serde_json::Value.
-    let v: Value = serde_json::from_str(data)?;
+    // Parse the string of data into serde_scon::Value.
+    let v: Value = serde_scon::from_str(data)?;
 
     // Access parts of the data by indexing with square brackets.
     println!("Please call {} at the number {}", v["name"], v["phones"][0]);
@@ -110,17 +104,17 @@ fn untyped_example() -> Result<()> {
 ```
 
 The result of square bracket indexing like `v["name"]` is a borrow of the data
-at that index, so the type is `&Value`. A JSON map can be indexed with string
-keys, while a JSON array can be indexed with integer keys. If the type of the
+at that index, so the type is `&Value`. A Scon map can be indexed with string
+keys, while a Scon array can be indexed with integer keys. If the type of the
 data is not right for the type with which it is being indexed, or if a map does
 not contain the key being indexed, or if the index into a vector is out of
 bounds, the returned element is `Value::Null`.
 
-When a `Value` is printed, it is printed as a JSON string. So in the code above,
+When a `Value` is printed, it is printed as a Scon string. So in the code above,
 the output looks like `Please call "John Doe" at the number "+44 1234567"`. The
-quotation marks appear because `v["name"]` is a `&Value` containing a JSON
-string and its JSON representation is `"John Doe"`. Printing as a plain string
-without quotation marks involves converting from a JSON string to a Rust string
+quotation marks appear because `v["name"]` is a `&Value` containing a Scon
+string and its Scon representation is `"John Doe"`. Printing as a plain string
+without quotation marks involves converting from a Scon string to a Rust string
 with [`as_str()`] or avoiding the use of `Value` as described in the following
 section.
 
@@ -133,9 +127,9 @@ unrecognized fields in the input data. The compiler is powerless to help you
 when you make a mistake, for example imagine typoing `v["name"]` as `v["nmae"]`
 in one of the dozens of places it is used in your code.
 
-## Parsing JSON as strongly typed data structures
+## Parsing Scon as strongly typed data structures
 
-Serde provides a powerful way of mapping JSON data into Rust data structures
+Serde provides a powerful way of mapping Scon data into Rust data structures
 largely automatically.
 
 <div align="right">
@@ -146,7 +140,7 @@ largely automatically.
 
 ```rust
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
+use serde_scon::Result;
 
 #[derive(Serialize, Deserialize)]
 struct Person {
@@ -156,21 +150,20 @@ struct Person {
 }
 
 fn typed_example() -> Result<()> {
-    // Some JSON input data as a &str. Maybe this comes from the user.
-    let data = r#"
-        {
-            "name": "John Doe",
-            "age": 43,
-            "phones": [
-                "+44 1234567",
+    // Some Scon input data as a &str. Maybe this comes from the user.
+    let data = r#"{
+            name"John Doe"
+            age 43
+            phones[
+                "+44 1234567"
                 "+44 2345678"
             ]
         }"#;
 
     // Parse the string of data into a Person object. This is exactly the
-    // same function as the one that produced serde_json::Value above, but
+    // same function as the one that produced serde_scon::Value above, but
     // now we are asking it for a Person as output.
-    let p: Person = serde_json::from_str(data)?;
+    let p: Person = serde_scon::from_str(data)?;
 
     // Do things just like with any other Rust data structure.
     println!("Please call {} at the number {}", p.name, p.phones[0]);
@@ -179,7 +172,7 @@ fn typed_example() -> Result<()> {
 }
 ```
 
-This is the same `serde_json::from_str` function as before, but this time we
+This is the same `serde_scon::from_str` function as before, but this time we
 assign the return value to a variable of type `Person` so Serde will
 automatically interpret the input data as a `Person` and produce informative
 error messages if the layout does not conform to what a `Person` is expected to
@@ -192,7 +185,7 @@ way. This includes built-in Rust standard library types like `Vec<T>` and
 
 Once we have `p` of type `Person`, our IDE and the Rust compiler can help us use
 it correctly like they do for any other Rust code. The IDE can autocomplete
-field names to prevent typos, which was impossible in the `serde_json::Value`
+field names to prevent typos, which was impossible in the `serde_scon::Value`
 representation. And the Rust compiler can check that when we write
 `p.phones[0]`, then `p.phones` is guaranteed to be a `Vec<String>` so indexing
 into it makes sense and produces a `String`.
@@ -202,9 +195,9 @@ derive]* page of the Serde site.
 
 [Using derive]: https://serde.rs/derive.html
 
-## Constructing JSON values
+## Constructing Scon values
 
-Serde JSON provides a [`json!` macro][macro] to build `serde_json::Value`
+Serde Scon provides a [`scon!` macro][macro] to build `serde_scon::Value`
 objects with very natural JSON syntax.
 
 <div align="right">
@@ -214,11 +207,11 @@ objects with very natural JSON syntax.
 </div>
 
 ```rust
-use serde_json::json;
+use serde_scon::scon;
 
 fn main() {
-    // The type of `john` is `serde_json::Value`
-    let john = json!({
+    // The type of `john` is `serde_scon::Value`
+    let john = scon!({
         "name": "John Doe",
         "age": 43,
         "phones": [
@@ -229,18 +222,18 @@ fn main() {
 
     println!("first phone number: {}", john["phones"][0]);
 
-    // Convert to a string of JSON and print it out
+    // Convert to a string of Scon and print it out
     println!("{}", john.to_string());
 }
 ```
 
-The `Value::to_string()` function converts a `serde_json::Value` into a `String`
-of JSON text.
+The `Value::to_string()` function converts a `serde_scon::Value` into a `String`
+of Scon text.
 
-One neat thing about the `json!` macro is that variables and expressions can be
-interpolated directly into the JSON value as you are building it. Serde will
+One neat thing about the `scon!` macro is that variables and expressions can be
+interpolated directly into the Scon value as you are building it. Serde will
 check at compile time that the value you are interpolating is able to be
-represented as JSON.
+represented as Scon.
 
 <div align="right">
 <a href="https://play.rust-lang.org/?edition=2018&gist=f9101a6e61dfc9e02c6a67f315ed24f2" target="_blank">
@@ -252,8 +245,8 @@ represented as JSON.
 let full_name = "John Doe";
 let age_last_year = 42;
 
-// The type of `john` is `serde_json::Value`
-let john = json!({
+// The type of `john` is `serde_scon::Value`
+let john = scon!({
     "name": full_name,
     "age": age_last_year + 1,
     "phones": [
@@ -263,16 +256,16 @@ let john = json!({
 ```
 
 This is amazingly convenient, but we have the problem we had before with
-`Value`: the IDE and Rust compiler cannot help us if we get it wrong. Serde JSON
-provides a better way of serializing strongly-typed data structures into JSON
+`Value`: the IDE and Rust compiler cannot help us if we get it wrong. Serde Scon
+provides a better way of serializing strongly-typed data structures into Scon
 text.
 
-## Creating JSON by serializing data structures
+## Creating Scon by serializing data structures
 
-A data structure can be converted to a JSON string by
-[`serde_json::to_string`][to_string]. There is also
-[`serde_json::to_vec`][to_vec] which serializes to a `Vec<u8>` and
-[`serde_json::to_writer`][to_writer] which serializes to any `io::Write`
+A data structure can be converted to a Scon string by
+[`serde_scon::to_string`][to_string]. There is also
+[`serde_scon::to_vec`][to_vec] which serializes to a `Vec<u8>` and
+[`serde_scon::to_writer`][to_writer] which serializes to any `io::Write`
 such as a File or a TCP stream.
 
 <div align="right">
@@ -283,7 +276,7 @@ such as a File or a TCP stream.
 
 ```rust
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
+use serde_scon::Result;
 
 #[derive(Serialize, Deserialize)]
 struct Address {
@@ -298,8 +291,8 @@ fn print_an_address() -> Result<()> {
         city: "London".to_owned(),
     };
 
-    // Serialize it to a JSON string.
-    let j = serde_json::to_string(&address)?;
+    // Serialize it to a Scon string.
+    let j = serde_scon::to_string(&address)?;
 
     // Print, write to a file, or send to an HTTP server.
     println!("{}", j);
@@ -347,16 +340,16 @@ closed without a response after some time.
 
 ## No-std support
 
-As long as there is a memory allocator, it is possible to use serde_json without
+As long as there is a memory allocator, it is possible to use serde_scon without
 the rest of the Rust standard library. Disable the default "std" feature and
 enable the "alloc" feature:
 
 ```toml
 [dependencies]
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_scon = { version = "1.0", default-features = false, features = ["alloc"] }
 ```
 
-For JSON support in Serde without a memory allocator, please see the
+For Scon support in Serde without a memory allocator, please see the
 [`serde-json-core`] crate.
 
 [`serde-json-core`]: https://github.com/rust-embedded-community/serde-json-core
@@ -375,14 +368,13 @@ For JSON support in Serde without a memory allocator, please see the
 #### License
 
 <sup>
-Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
-2.0</a> or <a href="LICENSE-MIT">MIT license</a> at your option.
+Licensed under <a href="LICENSE-MIT">MIT license</a>.
 </sup>
 
 <br>
 
 <sub>
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
-be dual licensed as above, without any additional terms or conditions.
+for inclusion in this crate by you, shall
+be licensed as above, without any additional terms or conditions.
 </sub>

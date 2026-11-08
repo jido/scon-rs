@@ -281,11 +281,11 @@
 //!
 //! ```toml
 //! [dependencies]
-//! serde_scon = { version = "1.0", default-features = false, features = ["alloc"] }
+//! serde_scon = { version = "0.0.1", default-features = false, features = ["alloc"] }
 //! ```
 //!
 //! For Scon support in Serde without a memory allocator, please see the
-//! [`serde-scon-core`] crate.
+//! [`serde-json-core`] crate.
 //!
 //! [value]: crate::value::Value
 //! [from_str]: crate::de::from_str
@@ -295,7 +295,7 @@
 //! [to_vec]: crate::ser::to_vec
 //! [to_writer]: crate::ser::to_writer
 //! [macro]: crate::scon
-//! [`serde-scon-core`]: https://github.com/rust-embedded-community/serde-scon-core
+//! [`serde-json-core`]: https://github.com/rust-embedded-community/serde-json-core
 
 #![doc(html_root_url = "https://docs.rs/serde_json/1.0.154")]
 // Ignored clippy lints
