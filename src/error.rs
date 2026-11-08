@@ -1,4 +1,4 @@
-//! When serializing or deserializing JSON goes wrong.
+//! When serializing or deserializing Scon goes wrong.
 
 use crate::io;
 use alloc::boxed::Box;
@@ -13,7 +13,7 @@ use std::error;
 use std::io::ErrorKind;
 
 /// This type represents all possible errors that can occur when serializing or
-/// deserializing JSON data.
+/// deserializing Scon data.
 pub struct Error {
     /// This `Box` allows us to keep the size of `Error` as small as possible. A
     /// larger `Error` type was substantially slower due to all the functions
@@ -21,7 +21,7 @@ pub struct Error {
     err: Box<ErrorImpl>,
 }
 
-/// Alias for a `Result` with the error type `serde_json::Error`.
+/// Alias for a `Result` with the error type `serde_scon::Error`.
 pub type Result<T> = result::Result<T, Error>;
 
 impl Error {
@@ -48,7 +48,7 @@ impl Error {
     /// Categorizes the cause of this error.
     ///
     /// - `Category::Io` - failure to read or write bytes on an I/O stream
-    /// - `Category::Syntax` - input that is not syntactically valid JSON
+    /// - `Category::Syntax` - input that is not syntactically valid Scon
     /// - `Category::Data` - input data that is semantically incorrect
     /// - `Category::Eof` - unexpected end of the input data
     pub fn classify(&self) -> Category {
@@ -74,10 +74,8 @@ impl Error {
             | ErrorCode::KeyMustBeAString
             | ErrorCode::ExpectedNumericKey
             | ErrorCode::FloatKeyMustBeFinite
-            | ErrorCode::LoneLeadingSurrogateInHexEscape
             | ErrorCode::TrailingComma
             | ErrorCode::TrailingCharacters
-            | ErrorCode::UnexpectedEndOfHexEscape
             | ErrorCode::RecursionLimitExceeded => Category::Syntax,
         }
     }
@@ -89,7 +87,7 @@ impl Error {
     }
 
     /// Returns true if this error was caused by input that was not
-    /// syntactically valid JSON.
+    /// syntactically valid Scon.
     pub fn is_syntax(&self) -> bool {
         self.classify() == Category::Syntax
     }
@@ -97,7 +95,7 @@ impl Error {
     /// Returns true if this error was caused by input data that was
     /// semantically incorrect.
     ///
-    /// For example, JSON containing a number is semantically incorrect when the
+    /// For example, Scon containing a number is semantically incorrect when the
     /// type being deserialized into holds a String.
     pub fn is_data(&self) -> bool {
         self.classify() == Category::Data
@@ -118,7 +116,7 @@ impl Error {
     /// # Example
     ///
     /// ```
-    /// use serde_json::Value;
+    /// use serde_scon::Value;
     /// use std::io::{self, ErrorKind, Read};
     /// use std::process;
     ///
@@ -135,9 +133,9 @@ impl Error {
     /// }
     ///
     /// fn main() {
-    ///     let reader = ReaderThatWillTimeOut(br#" {"k": "#);
+    ///     let reader = ReaderThatWillTimeOut(b"{k");
     ///
-    ///     let _: Value = match serde_json::from_reader(reader) {
+    ///     let _: Value = match serde_scon::from_reader(reader) {
     ///         Ok(value) => value,
     ///         Err(error) => {
     ///             if error.io_error_kind() == Some(ErrorKind::TimedOut) {
@@ -162,19 +160,19 @@ impl Error {
     }
 }
 
-/// Categorizes the cause of a `serde_json::Error`.
+/// Categorizes the cause of a `serde_scon::Error`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Category {
     /// The error was caused by a failure to read or write bytes on an I/O
     /// stream.
     Io,
 
-    /// The error was caused by input that was not syntactically valid JSON.
+    /// The error was caused by input that was not syntactically valid Scon.
     Syntax,
 
     /// The error was caused by input data that was semantically incorrect.
     ///
-    /// For example, JSON containing a number is semantically incorrect when the
+    /// For example, Scon containing a number is semantically incorrect when the
     /// type being deserialized into holds a String.
     Data,
 
@@ -188,9 +186,9 @@ pub enum Category {
 #[cfg(feature = "std")]
 #[allow(clippy::fallible_impl_from)]
 impl From<Error> for io::Error {
-    /// Convert a `serde_json::Error` into an `io::Error`.
+    /// Convert a `serde_scon::Error` into an `io::Error`.
     ///
-    /// JSON syntax and data errors are turned into `InvalidData` I/O errors.
+    /// Scon syntax and data errors are turned into `InvalidData` I/O errors.
     /// EOF errors are turned into `UnexpectedEof` I/O errors.
     ///
     /// ```
@@ -198,12 +196,12 @@ impl From<Error> for io::Error {
     ///
     /// enum MyError {
     ///     Io(io::Error),
-    ///     Json(serde_json::Error),
+    ///     Json(serde_scon::Error),
     /// }
     ///
-    /// impl From<serde_json::Error> for MyError {
-    ///     fn from(err: serde_json::Error) -> MyError {
-    ///         use serde_json::error::Category;
+    /// impl From<serde_scon::Error> for MyError {
+    ///     fn from(err: serde_scon::Error) -> MyError {
+    ///         use serde_scon::error::Category;
     ///         match err.classify() {
     ///             Category::Io => {
     ///                 MyError::Io(err.into())
@@ -250,7 +248,7 @@ pub(crate) enum ErrorCode {
     /// EOF while parsing a string.
     EofWhileParsingString,
 
-    /// EOF while parsing a JSON value.
+    /// EOF while parsing a Scon value.
     EofWhileParsingValue,
 
     /// Expected this character to be a `':'`.
@@ -265,7 +263,7 @@ pub(crate) enum ErrorCode {
     /// Expected to parse either a `true`, `false`, or a `null`.
     ExpectedSomeIdent,
 
-    /// Expected this character to start a JSON value.
+    /// Expected this character to start a Scon value.
     ExpectedSomeValue,
 
     /// Expected this character to be a `"`.
@@ -298,19 +296,13 @@ pub(crate) enum ErrorCode {
     /// Object key is a non-finite float value.
     FloatKeyMustBeFinite,
 
-    /// Lone leading surrogate in hex escape.
-    LoneLeadingSurrogateInHexEscape,
-
-    /// JSON has a comma after the last value in an array or map.
+    /// Scon has a comma after the last value in an array or map.
     TrailingComma,
 
-    /// JSON has non-whitespace trailing characters after the value.
+    /// Scon has non-whitespace trailing characters after the value.
     TrailingCharacters,
 
-    /// Unexpected end of hex escape.
-    UnexpectedEndOfHexEscape,
-
-    /// Encountered nesting of JSON maps and arrays more than 128 layers deep.
+    /// Encountered nesting of Scon maps and arrays more than 128 layers deep.
     RecursionLimitExceeded,
 }
 
@@ -324,7 +316,7 @@ impl Error {
 
     // Not public API. Should be pub(crate).
     //
-    // Update `eager_json` crate when this function changes.
+    // Update `eager_scon` crate when this function changes.
     #[doc(hidden)]
     #[cold]
     pub fn io(error: io::Error) -> Self {
@@ -373,19 +365,15 @@ impl Display for ErrorCode {
             ErrorCode::ControlCharacterWhileParsingString => {
                 f.write_str("control character (\\u0000-\\u001F) found while parsing a string")
             }
-            ErrorCode::KeyMustBeAString => f.write_str("key must be a string"),
+            ErrorCode::KeyMustBeAString => f.write_str("key must be in single quotes or bare"),
             ErrorCode::ExpectedNumericKey => {
                 f.write_str("invalid value: expected key to be a number in quotes")
             }
             ErrorCode::FloatKeyMustBeFinite => {
                 f.write_str("float key must be finite (got NaN or +/-inf)")
             }
-            ErrorCode::LoneLeadingSurrogateInHexEscape => {
-                f.write_str("lone leading surrogate in hex escape")
-            }
             ErrorCode::TrailingComma => f.write_str("trailing comma"),
             ErrorCode::TrailingCharacters => f.write_str("trailing characters"),
-            ErrorCode::UnexpectedEndOfHexEscape => f.write_str("unexpected end of hex escape"),
             ErrorCode::RecursionLimitExceeded => f.write_str("recursion limit exceeded"),
         }
     }

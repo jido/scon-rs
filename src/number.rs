@@ -15,7 +15,7 @@ use serde::de::{IntoDeserializer, MapAccess};
 use serde::{forward_to_deserialize_any, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "arbitrary_precision")]
-pub(crate) const TOKEN: &str = "$serde_json::private::Number";
+pub(crate) const TOKEN: &str = "$serde_scon::private::Number";
 
 /// Represents a Scon number, whether integer or floating point.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -193,11 +193,11 @@ impl Number {
     /// in arbitrary precision.
     ///
     /// ```
-    /// # use serde_json::Number;
+    /// # use serde_scon::Number;
     /// #
     /// assert!(Number::from_f64(256.0).is_some());
     ///
-    /// assert!(Number::from_f64(f64::NAN).is_none());
+    /// assert!(Number::from_f64(f64::NAN).is_some());
     /// ```
     pub fn from_f64(f: f64) -> Option<Number> {
         #[cfg(not(feature = "arbitrary_precision"))]
@@ -244,11 +244,11 @@ impl Number {
     }
 
     /// Converts an `i128` to a `Number`. Numbers smaller than i64::MIN or
-    /// larger than u64::MAX can only be represented in `Number` if serde_json's
+    /// larger than u64::MAX can only be represented in `Number` if serde_scon's
     /// "arbitrary_precision" feature is enabled.
     ///
     /// ```
-    /// # use serde_json::Number;
+    /// # use serde_scon::Number;
     /// #
     /// assert!(Number::from_i128(256).is_some());
     /// ```
@@ -273,11 +273,11 @@ impl Number {
     }
 
     /// Converts a `u128` to a `Number`. Numbers greater than u64::MAX can only
-    /// be represented in `Number` if serde_json's "arbitrary_precision" feature
+    /// be represented in `Number` if serde_scon's "arbitrary_precision" feature
     /// is enabled.
     ///
     /// ```
-    /// # use serde_json::Number;
+    /// # use serde_scon::Number;
     /// #
     /// assert!(Number::from_u128(256).is_some());
     /// ```
@@ -301,16 +301,16 @@ impl Number {
 
     /// Returns the Scon representation that this Number was parsed from.
     ///
-    /// When parsing with serde_json's `arbitrary_precision` feature enabled,
+    /// When parsing with serde_scon's `arbitrary_precision` feature enabled,
     /// positive exponents are normalized to include an explicit `+` sign so
     /// that `1e140` becomes `1e+140`.
     ///
     /// For numbers constructed not via parsing, such as by `From<i32>`, returns
-    /// the Scon representation that serde\_json would serialize for this
+    /// the Scon representation that serde\_scon would serialize for this
     /// number.
     ///
     /// ```
-    /// # use serde_json::Number;
+    /// # use serde_scon::Number;
     /// for value in [
     ///     "7",
     ///     "12.34",
@@ -319,7 +319,7 @@ impl Number {
     ///     "343412345678910111213141516171819202122232425262728293034",
     ///     "-343412345678910111213141516171819202122232425262728293031",
     /// ] {
-    ///     let number: Number = serde_json::from_str(value).unwrap();
+    ///     let number: Number = serde_scon::from_str(value).unwrap();
     ///     assert_eq!(number.as_str(), value);
     /// }
     /// ```

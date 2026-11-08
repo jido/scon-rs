@@ -1,9 +1,9 @@
-//! The Value enum, a loosely typed way of representing any valid JSON value.
+//! The Value enum, a loosely typed way of representing any valid Scon value.
 //!
-//! # Constructing JSON
+//! # Constructing Scon
 //!
-//! Serde JSON provides a [`scon!` macro][macro] to build `serde_scon::Value`
-//! objects with very natural JSON syntax.
+//! Serde Scon provides a [`scon!` macro][macro] to build `serde_scon::Value`
+//! objects with very natural Scon syntax.
 //!
 //! ```
 //! use serde_scon::scon;
@@ -21,18 +21,18 @@
 //!
 //!     println!("first phone number: {}", john["phones"][0]);
 //!
-//!     // Convert to a string of JSON and print it out
+//!     // Convert to a string of Scon and print it out
 //!     println!("{}", john.to_string());
 //! }
 //! ```
 //!
 //! The `Value::to_string()` function converts a `serde_scon::Value` into a
-//! `String` of JSON text.
+//! `String` of Scon text.
 //!
 //! One neat thing about the `scon!` macro is that variables and expressions can
-//! be interpolated directly into the JSON value as you are building it. Serde
+//! be interpolated directly into the Scon value as you are building it. Serde
 //! will check at compile time that the value you are interpolating is able to
-//! be represented as JSON.
+//! be represented as Scon.
 //!
 //! ```
 //! # use serde_scon::scon;
@@ -52,7 +52,7 @@
 //! });
 //! ```
 //!
-//! A string of JSON data can be parsed into a `serde_scon::Value` by the
+//! A string of Scon data can be parsed into a `serde_scon::Value` by the
 //! [`serde_scon::from_str`][from_str] function. There is also
 //! [`from_slice`][from_slice] for parsing from a byte slice `&[u8]` and
 //! [`from_reader`][from_reader] for parsing from any `io::Read` like a File or
@@ -62,13 +62,12 @@
 //! use serde_scon::{scon, Value, Error};
 //!
 //! fn untyped_example() -> Result<(), Error> {
-//!     // Some JSON input data as a &str. Maybe this comes from the user.
-//!     let data = r#"
-//!         {
-//!             "name": "John Doe",
-//!             "age": 43,
-//!             "phones": [
-//!                 "+44 1234567",
+//!     // Some Scon input data as a &str. Maybe this comes from the user.
+//!     let data = r#"{
+//!             name"John Doe"
+//!             age 43
+//!             phones[
+//!                 "+44 1234567"
 //!                 "+44 2345678"
 //!             ]
 //!         }"#;
@@ -109,12 +108,12 @@ pub use crate::number::Number;
 #[cfg_attr(docsrs, doc(cfg(feature = "raw_value")))]
 pub use crate::raw::{to_raw_value, RawValue};
 
-/// Represents any valid JSON value.
+/// Represents any valid Scon value.
 ///
 /// See the [`serde_scon::value` module documentation](self) for usage examples.
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Value {
-    /// Represents a JSON null value.
+    /// Represents a Scon null value.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -123,7 +122,7 @@ pub enum Value {
     /// ```
     Null,
 
-    /// Represents a JSON boolean.
+    /// Represents a Scon boolean.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -132,7 +131,7 @@ pub enum Value {
     /// ```
     Bool(bool),
 
-    /// Represents a JSON number, whether integer or floating point.
+    /// Represents a Scon number, whether integer or floating point.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -141,7 +140,7 @@ pub enum Value {
     /// ```
     Number(Number),
 
-    /// Represents a JSON string.
+    /// Represents a Scon string.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -150,7 +149,7 @@ pub enum Value {
     /// ```
     String(String),
 
-    /// Represents a JSON array.
+    /// Represents a Scon array.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -159,12 +158,12 @@ pub enum Value {
     /// ```
     Array(Vec<Value>),
 
-    /// Represents a JSON object.
+    /// Represents a Scon object.
     ///
     /// By default the map is backed by a BTreeMap. Enable the `preserve_order`
     /// feature of serde_scon to use IndexMap instead, which preserves
     /// entries in the order they are inserted into the map. In particular, this
-    /// allows JSON data to be deserialized into a Value and serialized to a
+    /// allows Scon data to be deserialized into a Value and serialized to a
     /// string while retaining the order of map keys in the input.
     ///
     /// ```
@@ -195,7 +194,7 @@ impl Debug for Value {
 }
 
 impl Display for Value {
-    /// Display a JSON value as a string.
+    /// Display a Scon value as a string.
     ///
     /// ```
     /// # use serde_scon::scon;
@@ -204,20 +203,20 @@ impl Display for Value {
     ///
     /// // Compact format:
     /// //
-    /// // {"city":"London","street":"10 Downing Street"}
+    /// // {city London,street"10 Downing Street"}
     /// let compact = format!("{}", scon);
     /// assert_eq!(compact,
-    ///     "{\"city\":\"London\",\"street\":\"10 Downing Street\"}");
+    ///     "{city London,street\"10 Downing Street\"}");
     ///
     /// // Pretty format:
     /// //
     /// // {
-    /// //   "city": "London",
-    /// //   "street": "10 Downing Street"
+    /// //  city London
+    /// //  street"10 Downing Street"
     /// // }
     /// let pretty = format!("{:#}", scon);
     /// assert_eq!(pretty,
-    ///     "{\n  \"city\": \"London\",\n  \"street\": \"10 Downing Street\"\n}");
+    ///     "{\n city London\n street\"10 Downing Street\"\n}");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         struct WriterFormatter<'a, 'b: 'a> {
@@ -264,7 +263,7 @@ fn parse_index(s: &str) -> Option<usize> {
 }
 
 impl Value {
-    /// Index into a JSON array or map. A string index can be used to access a
+    /// Index into a Scon array or map. A string index can be used to access a
     /// value in a map, and a usize index can be used to access an element of an
     /// array.
     ///
@@ -306,7 +305,7 @@ impl Value {
         index.index_into(self)
     }
 
-    /// Mutably index into a JSON array or map. A string index can be used to
+    /// Mutably index into a Scon array or map. A string index can be used to
     /// access a value in a map, and a usize index can be used to access an
     /// element of an array.
     ///
@@ -479,7 +478,7 @@ impl Value {
     /// // The boolean `false` is not a string.
     /// assert_eq!(v["b"].as_str(), None);
     ///
-    /// // JSON values are printed in JSON representation, so strings are in quotes.
+    /// // Scon values are printed in Scon representation, so strings are in quotes.
     /// //
     /// //    The value is: "some string"
     /// println!("The value is: {}", v["a"]);
@@ -750,10 +749,10 @@ impl Value {
         }
     }
 
-    /// Looks up a value by a JSON Pointer.
+    /// Looks up a value by a Scon Pointer.
     ///
-    /// JSON Pointer defines a string syntax for identifying a specific value
-    /// within a JavaScript Object Notation (JSON) document.
+    /// Scon Pointer defines a string syntax for identifying a specific value
+    /// within a Simple compact object notation (Scon) document.
     ///
     /// A Pointer is a Unicode string with the reference tokens separated by `/`.
     /// Inside tokens `/` is replaced by `~1` and `~` is replaced by `~0`. The
@@ -794,11 +793,11 @@ impl Value {
             })
     }
 
-    /// Looks up a value by a JSON Pointer and returns a mutable reference to
+    /// Looks up a value by a Scon Pointer and returns a mutable reference to
     /// that value.
     ///
-    /// JSON Pointer defines a string syntax for identifying a specific value
-    /// within a JavaScript Object Notation (JSON) document.
+    /// Scon Pointer defines a string syntax for identifying a specific value
+    /// within a Simple compact object notation (Scon) document.
     ///
     /// A Pointer is a Unicode string with the reference tokens separated by `/`.
     /// Inside tokens `/` is replaced by `~1` and `~` is replaced by `~0`. The
@@ -813,7 +812,7 @@ impl Value {
     /// use serde_scon::Value;
     ///
     /// fn main() {
-    ///     let s = r#"{"x": 1.0, "y": 2.0}"#;
+    ///     let s = "{x 1.0, y 2.0}";
     ///     let mut value: Value = serde_scon::from_str(s).unwrap();
     ///
     ///     // Check value using read-only pointer
@@ -862,14 +861,14 @@ impl Value {
         mem::replace(self, Value::Null)
     }
 
-    /// Reorders the entries of all `Value::Object` nested within this JSON
+    /// Reorders the entries of all `Value::Object` nested within this Scon
     /// value according to `str`'s usual ordering.
     ///
     /// If serde_scon's "preserve_order" feature is not enabled, this method
-    /// does no work because all JSON maps are always kept in a sorted state.
+    /// does no work because all Scon maps are always kept in a sorted state.
     ///
     /// If serde_scon's "preserve_order" feature is enabled, this method
-    /// destroys the original source order or insertion order of the JSON
+    /// destroys the original source order or insertion order of the Scon
     /// objects in favor of an alphanumerical order that matches how a BTreeMap
     /// with the same contents would be ordered.
     pub fn sort_all_objects(&mut self) {
@@ -907,7 +906,7 @@ impl Value {
 /// }
 ///
 /// # fn try_main() -> Result<(), serde_scon::Error> {
-/// let data = r#" { "level": 42 } "#;
+/// let data = "{ level 42 }";
 /// let s: Settings = serde_scon::from_str(data)?;
 ///
 /// assert_eq!(s.level, 42);
@@ -938,7 +937,7 @@ mod partial_eq;
 mod ser;
 
 /// Convert a `T` into `serde_scon::Value` which is an enum that can represent
-/// any valid JSON data.
+/// any valid Scon data.
 ///
 /// # Example
 ///
@@ -1029,10 +1028,10 @@ where
 ///
 /// This conversion can fail if the structure of the Value does not match the
 /// structure expected by `T`, for example if `T` is a struct type but the Value
-/// contains something other than a JSON map. It can also fail if the structure
+/// contains something other than a Scon map. It can also fail if the structure
 /// is correct but `T`'s implementation of `Deserialize` decides that something
 /// is wrong with the data, for example required struct fields are missing from
-/// the JSON map or some number is too big to fit in the expected primitive
+/// the Scon map or some number is too big to fit in the expected primitive
 /// type.
 pub fn from_value<T>(value: Value) -> Result<T, Error>
 where

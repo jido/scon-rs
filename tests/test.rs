@@ -1220,7 +1220,7 @@ fn test_parse_object() {
     test_parse_err::<BTreeMap<String, u32>>(&[
         ("{", "EOF while parsing an object at line 1 column 1"),
         ("{ ", "EOF while parsing an object at line 1 column 2"),
-        ("{1", "key must be a string at line 1 column 2"),
+        ("{1", "key must be in single quotes or bare at line 1 column 2"),
         ("{ a", "EOF while parsing a value at line 1 column 3"),
         ("{a", "EOF while parsing a value at line 1 column 2"),
         ("{a ", "expected value at line 1 column 3"),
@@ -1725,7 +1725,7 @@ fn test_serialize_rejects_adt_keys() {
     );
 
     let err = to_vec(&map).unwrap_err();
-    assert_eq!(err.to_string(), "key must be a string");
+    assert_eq!(err.to_string(), "key must be in single quotes or bare");
 }
 
 #[test]

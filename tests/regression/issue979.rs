@@ -25,5 +25,5 @@ fn test() {
     let mut de = serde_scon::Deserializer::from_str("{[]/}");
     let err = de.deserialize_enum("name", &[], EnumVisitor).unwrap_err();
 
-    assert!(err.to_string().contains("key must be a string"));
+    assert!(err.to_string().contains("key must be in single quotes or bare"));
 }

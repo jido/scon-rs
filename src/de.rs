@@ -1,4 +1,4 @@
-//! Deserialize JSON data to a Rust data structure.
+//! Deserialize Scon data to a Rust data structure.
 
 use crate::error::{Error, ErrorCode, Result};
 #[cfg(feature = "float_roundtrip")]
@@ -27,7 +27,7 @@ pub use crate::read::IoRead;
 
 //////////////////////////////////////////////////////////////////////////////
 
-/// A structure that deserializes JSON into Rust values.
+/// A structure that deserializes Scon into Rust values.
 pub struct Deserializer<R> {
     read: R,
     scratch: Vec<u8>,
@@ -43,11 +43,11 @@ impl<'de, R> Deserializer<R>
 where
     R: read::Read<'de>,
 {
-    /// Create a JSON deserializer from one of the possible serde_json input
+    /// Create a Scon deserializer from one of the possible serde_scon input
     /// sources.
     ///
     /// When reading from a source against which short reads are not efficient, such
-    /// as a [`File`], you will want to apply your own buffering because serde_json
+    /// as a [`File`], you will want to apply your own buffering because serde_scon
     /// will not buffer the input. See [`std::io::BufReader`].
     ///
     /// Typically it is more convenient to use one of these methods instead:
@@ -76,7 +76,7 @@ impl<R> Deserializer<read::IoRead<R>>
 where
     R: crate::io::Read,
 {
-    /// Creates a JSON deserializer from an `io::Read`.
+    /// Creates a Scon deserializer from an `io::Read`.
     ///
     /// Reader-based deserializers do not support deserializing borrowed types
     /// like `&str`, since the `std::io::Read` trait has no non-copying methods
@@ -87,14 +87,14 @@ where
 }
 
 impl<'a> Deserializer<read::SliceRead<'a>> {
-    /// Creates a JSON deserializer from a `&[u8]`.
+    /// Creates a Scon deserializer from a `&[u8]`.
     pub fn from_slice(bytes: &'a [u8]) -> Self {
         Deserializer::new(read::SliceRead::new(bytes))
     }
 }
 
 impl<'a> Deserializer<read::StrRead<'a>> {
-    /// Creates a JSON deserializer from a `&str`.
+    /// Creates a Scon deserializer from a `&str`.
     pub fn from_str(s: &'a str) -> Self {
         Deserializer::new(read::StrRead::new(s))
     }
@@ -152,7 +152,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
     }
 
-    /// Turn a JSON deserializer into an iterator over values of type T.
+    /// Turn a Scon deserializer into an iterator over values of type T.
     pub fn into_iter<T>(self) -> StreamDeserializer<'de, R, T>
     where
         T: de::Deserialize<'de>,
@@ -169,7 +169,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
     }
 
-    /// Parse arbitrarily deep JSON structures without any consideration for
+    /// Parse arbitrarily deep Scon structures without any consideration for
     /// overflowing the stack.
     ///
     /// You will want to provide some other way to protect against stack
@@ -180,22 +180,22 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     /// completed, including, but not limited to, Display and Debug and Drop
     /// impls.
     ///
-    /// *This method is only available if serde_json is built with the
+    /// *This method is only available if serde_scon is built with the
     /// `"unbounded_depth"` feature.*
     ///
     /// # Examples
     ///
     /// ```
     /// use serde::Deserialize;
-    /// use serde_json::Value;
+    /// use serde_scon::Value;
     ///
     /// fn main() {
-    ///     let mut json = String::new();
+    ///     let mut scon = String::new();
     ///     for _ in 0..10000 {
-    ///         json = format!("[{}]", json);
+    ///         scon = format!("[{}]", scon);
     ///     }
     ///
-    ///     let mut deserializer = serde_json::Deserializer::from_str(&json);
+    ///     let mut deserializer = serde_scon::Deserializer::from_str(&scon);
     ///     deserializer.disable_recursion_limit();
     ///     let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
     ///     let value = Value::deserialize(deserializer).unwrap();
@@ -1665,9 +1665,9 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     /// ```
     /// use serde_bytes::ByteBuf;
     ///
-    /// fn look_at_bytes() -> Result<(), serde_json::Error> {
-    ///     let json_data = b"\"some bytes: \xe5\x00\xe5\"";
-    ///     let bytes: ByteBuf = serde_json::from_slice(json_data)?;
+    /// fn look_at_bytes() -> Result<(), serde_scon::Error> {
+    ///     let scon_data = b"\"some bytes: \xe5\x00\xe5\"";
+    ///     let bytes: ByteBuf = serde_scon::from_slice(scon_data)?;
     ///
     ///     assert_eq!(b'\xe5', bytes[12]);
     ///     assert_eq!(b'\0', bytes[13]);
@@ -2254,7 +2254,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::VariantAccess<'de> for UnitVariantAccess<'a
 }
 
 /// Only deserialize from this after peeking a '"' byte! Otherwise it may
-/// deserialize invalid JSON successfully.
+/// deserialize invalid Scon successfully.
 struct MapKey<'a, R: 'a> {
     de: &'a mut Deserializer<R>,
 }
@@ -2453,19 +2453,19 @@ where
 
 //////////////////////////////////////////////////////////////////////////////
 
-/// Iterator that deserializes a stream into multiple JSON values.
+/// Iterator that deserializes a stream into multiple Scon values.
 ///
-/// A stream deserializer can be created from any JSON deserializer using the
+/// A stream deserializer can be created from any Scon deserializer using the
 /// `Deserializer::into_iter` method.
 ///
-/// The data can consist of any JSON value. Values need to be a self-delineating value e.g.
+/// The data can consist of any Scon value. Values need to be a self-delineating value e.g.
 /// arrays, objects, or strings, or be followed by whitespace or a self-delineating value.
 ///
 /// ```
-/// use serde_json::{Deserializer, Value};
+/// use serde_scon::{Deserializer, Value};
 ///
 /// fn main() {
-///     let data = "{\"k\": 3}1\"cool\"\"stuff\" 3{}  [0, 1, 2]";
+///     let data = "{k 3}1\"cool\"\"stuff\" 3{}  [0, 1, 2]";
 ///
 ///     let stream = Deserializer::from_str(data).into_iter::<Value>();
 ///
@@ -2487,7 +2487,7 @@ where
     R: read::Read<'de>,
     T: de::Deserialize<'de>,
 {
-    /// Create a JSON stream deserializer from one of the possible serde_json
+    /// Create a Scon stream deserializer from one of the possible serde_scon
     /// input sources.
     ///
     /// Typically it is more convenient to use one of these methods instead:
@@ -2514,7 +2514,7 @@ where
     /// ```
     /// let data = b"[0] [1] [";
     ///
-    /// let de = serde_json::Deserializer::from_slice(data);
+    /// let de = serde_scon::Deserializer::from_slice(data);
     /// let mut stream = de.into_iter::<Vec<i32>>();
     /// assert_eq!(0, stream.byte_offset());
     ///
@@ -2533,7 +2533,7 @@ where
     ///
     /// *Note:* In the future this method may be changed to return the number of
     /// bytes so far deserialized into a successful T *or* syntactically valid
-    /// JSON skipped over due to a type error. See [serde-rs/json#70] for an
+    /// Scon skipped over due to a type error. See [serde-rs/json#70] for an
     /// example illustrating this.
     ///
     /// [serde-rs/json#70]: https://github.com/serde-rs/json/issues/70
@@ -2633,13 +2633,13 @@ where
     Ok(value)
 }
 
-/// Deserialize an instance of type `T` from an I/O stream of JSON.
+/// Deserialize an instance of type `T` from an I/O stream of Scon.
 ///
 /// The content of the I/O stream is deserialized directly from the stream
-/// without being buffered in memory by serde_json.
+/// without being buffered in memory by serde_scon.
 ///
 /// When reading from a source against which short reads are not efficient, such
-/// as a [`File`], you will want to apply your own buffering because serde_json
+/// as a [`File`], you will want to apply your own buffering because serde_scon
 /// will not buffer the input. See [`std::io::BufReader`].
 ///
 /// It is expected that the input stream ends after the deserialized object.
@@ -2677,8 +2677,8 @@ where
 ///     let file = File::open(path)?;
 ///     let reader = BufReader::new(file);
 ///
-///     // Read the JSON contents of the file as an instance of `User`.
-///     let u = serde_json::from_reader(reader)?;
+///     // Read the Scon contents of the file as an instance of `User`.
+///     let u = serde_scon::from_reader(reader)?;
 ///
 ///     // Return the `User`.
 ///     Ok(u)
@@ -2687,7 +2687,7 @@ where
 /// fn main() {
 /// # }
 /// # fn fake_main() {
-///     let u = read_user_from_file("test.json").unwrap();
+///     let u = read_user_from_file("test.scon").unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```
@@ -2708,7 +2708,7 @@ where
 /// }
 ///
 /// fn read_user_from_stream(stream: &mut BufReader<TcpStream>) -> Result<User, Box<dyn Error>> {
-///     let mut de = serde_json::Deserializer::from_reader(stream);
+///     let mut de = serde_scon::Deserializer::from_reader(stream);
 ///     let u = User::deserialize(&mut de)?;
 ///
 ///     Ok(u)
@@ -2730,10 +2730,10 @@ where
 ///
 /// This conversion can fail if the structure of the input does not match the
 /// structure expected by `T`, for example if `T` is a struct type but the input
-/// contains something other than a JSON map. It can also fail if the structure
+/// contains something other than a Scon map. It can also fail if the structure
 /// is correct but `T`'s implementation of `Deserialize` decides that something
 /// is wrong with the data, for example required struct fields are missing from
-/// the JSON map or some number is too big to fit in the expected primitive
+/// the Scon map or some number is too big to fit in the expected primitive
 /// type.
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
@@ -2745,7 +2745,7 @@ where
     from_trait(read::IoRead::new(rdr))
 }
 
-/// Deserialize an instance of type `T` from bytes of JSON text.
+/// Deserialize an instance of type `T` from bytes of Scon text.
 ///
 /// # Example
 ///
@@ -2760,13 +2760,12 @@ where
 ///
 /// fn main() {
 ///     // The type of `j` is `&[u8]`
-///     let j = b"
-///         {
-///             \"fingerprint\": \"0xF9BA143B95FF6D82\",
-///             \"location\": \"Menlo Park, CA\"
+///     let j = b"{
+///             fingerprint\"0xF9BA143B95FF6D82\"
+///             location\"Menlo Park, CA\"
 ///         }";
 ///
-///     let u: User = serde_json::from_slice(j).unwrap();
+///     let u: User = serde_scon::from_slice(j).unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```
@@ -2775,10 +2774,10 @@ where
 ///
 /// This conversion can fail if the structure of the input does not match the
 /// structure expected by `T`, for example if `T` is a struct type but the input
-/// contains something other than a JSON map. It can also fail if the structure
+/// contains something other than a Scon map. It can also fail if the structure
 /// is correct but `T`'s implementation of `Deserialize` decides that something
 /// is wrong with the data, for example required struct fields are missing from
-/// the JSON map or some number is too big to fit in the expected primitive
+/// the Scon map or some number is too big to fit in the expected primitive
 /// type.
 pub fn from_slice<'a, T>(v: &'a [u8]) -> Result<T>
 where
@@ -2787,7 +2786,7 @@ where
     from_trait(read::SliceRead::new(v))
 }
 
-/// Deserialize an instance of type `T` from a string of JSON text.
+/// Deserialize an instance of type `T` from a string of Scon text.
 ///
 /// # Example
 ///
@@ -2802,13 +2801,12 @@ where
 ///
 /// fn main() {
 ///     // The type of `j` is `&str`
-///     let j = "
-///         {
-///             \"fingerprint\": \"0xF9BA143B95FF6D82\",
-///             \"location\": \"Menlo Park, CA\"
+///     let j = "{
+///             fingerprint\"0xF9BA143B95FF6D82\"
+///             location\"Menlo Park, CA\"
 ///         }";
 ///
-///     let u: User = serde_json::from_str(j).unwrap();
+///     let u: User = serde_scon::from_str(j).unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```
@@ -2817,10 +2815,10 @@ where
 ///
 /// This conversion can fail if the structure of the input does not match the
 /// structure expected by `T`, for example if `T` is a struct type but the input
-/// contains something other than a JSON map. It can also fail if the structure
+/// contains something other than a Scon map. It can also fail if the structure
 /// is correct but `T`'s implementation of `Deserialize` decides that something
 /// is wrong with the data, for example required struct fields are missing from
-/// the JSON map or some number is too big to fit in the expected primitive
+/// the Scon map or some number is too big to fit in the expected primitive
 /// type.
 pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where

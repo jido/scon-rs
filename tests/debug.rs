@@ -51,7 +51,7 @@ fn value_object() {
 #[test]
 fn error() {
     let err = serde_scon::from_str::<Value>("{0}").unwrap_err();
-    let expected = "Error(\"key must be a string\", line: 1, column: 2)";
+    let expected = "Error(\"key must be in single quotes or bare\", line: 1, column: 2)";
     assert_eq!(format!("{:?}", err), expected);
 }
 
