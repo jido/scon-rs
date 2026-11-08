@@ -355,8 +355,8 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     where
         V: de::Visitor<'any>,
     {
-        _ = tri!(self.parse_whitespace());
-        let peek = match tri!(self.peek()) {
+        self.after_key = false;
+        let peek = match tri!(self.parse_whitespace()) {
             Some(b) => b,
             None => {
                 return Err(self.peek_error(ErrorCode::EofWhileParsingValue));
@@ -1125,17 +1125,10 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     }
 
     fn end_seq(&mut self) -> Result<()> {
-        match tri!(self.parse_line_whitespace()) {
+        match tri!(self.parse_whitespace()) {
             Some(b']') => {
                 self.eat_char();
                 Ok(())
-            }
-            Some(b',') | Some(b'\n') => {
-                self.eat_char();
-                match self.parse_whitespace() {
-                    //Ok(Some(b']')) => Err(self.peek_error(ErrorCode::TrailingComma)),
-                    _ => Err(self.peek_error(ErrorCode::TrailingCharacters)),
-                }
             }
             Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
             None => Err(self.peek_error(ErrorCode::EofWhileParsingList)),
@@ -1143,12 +1136,11 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     }
 
     fn end_map(&mut self) -> Result<()> {
-        match tri!(self.parse_line_whitespace()) {
+        match tri!(self.parse_whitespace()) {
             Some(b'}') => {
                 self.eat_char();
                 Ok(())
             }
-            //Some(b',') => Err(self.peek_error(ErrorCode::TrailingComma)),
             Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
             None => Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
         }
@@ -1445,6 +1437,8 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        let after_key = self.after_key;
+        self.after_key = false;
         let peek = match tri!(if self.after_key {self.peek()} else {self.parse_whitespace()}) {
             Some(b) => b,
             None => {
@@ -1486,7 +1480,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     Reference::Copied(s) => visitor.visit_str(s),
                 }
             }
-            b'`' if !self.after_key => {
+            b'`' if !after_key => {
                 self.eat_char();
                 self.scratch.clear();
                 match tri!(self.read.parse_bare_str(&mut self.scratch)) {
@@ -1517,7 +1511,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                 }
             }
             b'.' | 0..=b' ' | b'\x7F' => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
-            _ if !self.after_key => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+            _ if !after_key => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
             _ => {
                 self.scratch.clear();
                 match tri!(self.read.parse_bare_str(&mut self.scratch)) {
@@ -1542,6 +1536,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1595,6 +1590,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        let after_key = self.after_key;
         self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
@@ -1613,16 +1609,29 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                 }
             }
             b'.' | b'-' | b'+' | b'0'..=b'9' | b'*' | b'~' | b'/' | b'?' | b'\'' |
-            b'^' | b'<' | b'{' | b'[' | b'`' => {
+            b'^' | b'<' | b'{' | b'[' => {
                 Err(self.peek_invalid_type(&visitor))
             }
-            _ => {
+            b'`' => {
+                if after_key {
+                    Err(self.peek_invalid_type(&visitor))
+                } else {
+                    self.eat_char();
+                    self.scratch.clear();
+                    match tri!(self.read.parse_bare_str(&mut self.scratch)) {
+                        Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                        Reference::Copied(s) => visitor.visit_str(s),
+                    }
+                }
+            }
+            _ if after_key => {
                 self.scratch.clear();
                 match tri!(self.read.parse_bare_str(&mut self.scratch)) {
                     Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
                     Reference::Copied(s) => visitor.visit_str(s),
                 }
             }
+            _ => Err(self.peek_invalid_type(&visitor)),
         };
 
         match value {
@@ -1673,6 +1682,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1713,6 +1723,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         match tri!(self.peek()) {   // no whitespace
             Some(b'/') => {
                 self.eat_char();
@@ -1726,6 +1737,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1775,6 +1787,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1826,6 +1839,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1863,6 +1877,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         let peek = match tri!(self.peek()) {    // no whitespace
             Some(b) => b,
             None => {
@@ -1914,6 +1929,8 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        let after_key = self.after_key;
+        self.after_key = false;
         match tri!(self.parse_whitespace()) {
             Some(b'{') => {
                 check_recursion! {
@@ -1932,11 +1949,14 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                 }
             }
             Some(b'"') => visitor.visit_enum(UnitVariantAccess::new(self)), //"
-            Some(b'`') => {
-                self.eat_char();
-                visitor.visit_enum(UnitVariantAccess::new(self))
+            Some(b'`') if !after_key => visitor.visit_enum(UnitVariantAccess::new(self)),
+            Some(_) => {
+                if after_key {
+                    visitor.visit_enum(UnitVariantAccess::new(self))
+                } else {
+                    Err(self.peek_error(ErrorCode::ExpectedSomeValue))
+                }
             }
-            Some(_) => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
             None => Err(self.peek_error(ErrorCode::EofWhileParsingValue)),
         }
     }
@@ -1952,6 +1972,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
+        self.after_key = false;
         tri!(self.ignore_value());
         visitor.visit_unit()
     }
@@ -1975,34 +1996,38 @@ impl<'de, 'a, R: Read<'de> + 'a> de::SeqAccess<'de> for SeqAccess<'a, R> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        fn has_next_element<'de, 'a, R: Read<'de> + 'a>(
-            seq: &mut SeqAccess<'a, R>,
-        ) -> Result<bool> {
-            let peek = match tri!(seq.de.parse_line_whitespace()) {
-                Some(b) => b,
+        fn has_next_element<'de, 'a, R: Read<'de> + 'a>(seq: &mut SeqAccess<'a, R>) -> Result<bool> {
+            let mut peek = tri!(seq.de.parse_line_whitespace());
+            
+            peek = match peek {
+                Some(b',') => {
+                    if seq.first {
+                        return Err(seq.de.peek_error(ErrorCode::TrailingComma));
+                    } else {
+                        seq.de.eat_char();
+                        tri!(seq.de.parse_line_whitespace())
+                    }
+                }
+                Some(b'\n') => tri!(seq.de.parse_whitespace()),  // eat whitespace including '\n'
+                Some(b']') => peek,
+                Some(_) => {
+                    if seq.first {
+                        peek
+                    } else {
+                        return Err(seq.de.peek_error(ErrorCode::ExpectedListCommaOrEnd));
+                    }
+                }
                 None => {
                     return Err(seq.de.peek_error(ErrorCode::EofWhileParsingList));
                 }
             };
+            seq.first = false;
 
-            if peek == b']' {
-                Ok(false)
-            } else if seq.first {
-                seq.first = false;
-                if peek == b'\n' {
-                    seq.de.eat_char();
-                    tri!(seq.de.parse_whitespace());
-                }
-                Ok(true)
-            } else if peek == b',' || peek == b'\n' {
-                seq.de.eat_char();
-                match tri!(seq.de.parse_whitespace()) {
-                    Some(b']' | b',') => Err(seq.de.peek_error(ErrorCode::TrailingComma)),
-                    Some(_) => Ok(true),
-                    None => Err(seq.de.peek_error(ErrorCode::EofWhileParsingValue)),
-                }
-            } else {
-                Err(seq.de.peek_error(ErrorCode::ExpectedListCommaOrEnd))
+            match peek {
+                Some(b',') | Some(b'\n') => Err(seq.de.peek_error(ErrorCode::TrailingComma)),
+                Some(b']') => Ok(false),
+                Some(_) => Ok(true),
+                None => Err(seq.de.peek_error(ErrorCode::EofWhileParsingList)),
             }
         }
 
@@ -2033,31 +2058,37 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
         K: de::DeserializeSeed<'de>,
     {
         fn has_next_key<'de, 'a, R: Read<'de> + 'a>(map: &mut MapAccess<'a, R>) -> Result<bool> {
-            let peek = match tri!(map.de.parse_line_whitespace()) {
-                Some(b) => b,
+            let mut peek = tri!(map.de.parse_line_whitespace());
+            
+            peek = match peek {
+                Some(b',') => {
+                    if map.first {
+                        return Err(map.de.peek_error(ErrorCode::TrailingComma));
+                    } else {
+                        map.de.eat_char();
+                        tri!(map.de.parse_line_whitespace())
+                    }
+                }
+                Some(b'\n') => tri!(map.de.parse_whitespace()),  // eat whitespace including '\n'
+                Some(b'}') => peek,
+                Some(_) => {
+                    if map.first {
+                        peek
+                    } else {
+                        return Err(map.de.peek_error(ErrorCode::ExpectedObjectCommaOrEnd));
+                    }
+                }
                 None => {
                     return Err(map.de.peek_error(ErrorCode::EofWhileParsingObject));
                 }
             };
+            map.first = false;
 
-            if peek == b'}' {
-                Ok(false)
-            } else if map.first {
-                map.first = false;
-                if peek == b'\n' {
-                    map.de.eat_char();
-                    tri!(map.de.parse_whitespace());
-                }
-                Ok(true)
-            } else if peek == b',' || peek == b'\n' {
-                map.de.eat_char();
-                match tri!(map.de.parse_whitespace()) {
-                    Some(b',') => Err(map.de.peek_error(ErrorCode::TrailingComma)),
-                    Some(_) => Ok(true),
-                    None => Err(map.de.peek_error(ErrorCode::EofWhileParsingValue)),
-                }
-            } else {
-                Err(map.de.peek_error(ErrorCode::ExpectedObjectCommaOrEnd))
+            match peek {
+                Some(b',') | Some(b'\n') => Err(map.de.peek_error(ErrorCode::TrailingComma)),
+                Some(b'}') => Ok(false),
+                Some(_) => Ok(true),
+                None => Err(map.de.peek_error(ErrorCode::EofWhileParsingObject)),
             }
         }
 

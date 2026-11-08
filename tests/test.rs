@@ -1186,8 +1186,8 @@ fn test_parse_list() {
         ("[", "EOF while parsing a list at line 1 column 1"),
         ("[ ", "EOF while parsing a list at line 1 column 2"),
         ("[1", "EOF while parsing a list at line 1 column 2"),
-        ("[1,", "EOF while parsing a value at line 1 column 3"),
-        ("[1,]", "trailing comma at line 1 column 4"),
+        ("[1,", "EOF while parsing a list at line 1 column 3"),
+        ("[1,\n]", "trailing comma at line 2 column 0"),
         ("[1 2]", "expected `,` or `]` at line 1 column 4"),
         ("[]a", "trailing characters at line 1 column 3"),
     ]);
@@ -1223,12 +1223,12 @@ fn test_parse_object() {
         ("{1", "key must be a string at line 1 column 2"),
         ("{ a", "EOF while parsing a value at line 1 column 3"),
         ("{a", "EOF while parsing a value at line 1 column 2"),
-        ("{a ", "EOF while parsing a value at line 1 column 3"),
-        ("{a: ", "expected `:` at line 1 column 6"),
-        ("{a:a", "EOF while parsing a value at line 1 column 5"),
-        ("{a 1", "EOF while parsing a value at line 1 column 5"),
-        ("{a 1 1", "expected `,` or `}` at line 1 column 8"),
-        ("{a 1,", "EOF while parsing a value at line 1 column 7"),
+        ("{a ", "expected value at line 1 column 3"),
+        ("{a: ", "expected value at line 1 column 3"),
+        ("{a:a", "expected value at line 1 column 3"),
+        ("{a 1", "EOF while parsing an object at line 1 column 4"),
+        ("{a 1 1", "expected `,` or `}` at line 1 column 6"),
+        ("{a 1,", "EOF while parsing an object at line 1 column 5"),
         ("{}a", "trailing characters at line 1 column 3"),
     ]);
 
@@ -1281,7 +1281,7 @@ fn test_parse_struct() {
             "missing field `a` at line 1 column 18",
         ),
     ]);
-
+    
     test_parse_ok(vec![
         (
 "{
@@ -1309,7 +1309,7 @@ fn test_parse_struct() {
 "[
  [
   [
-   [ /, 2, [ `abc, `xyz ]
+   /, 2, [ `abc, `xyz, ]
   ]
  ]
 ]",
@@ -1372,12 +1372,12 @@ fn test_parse_enum_errors() {
              "invalid type: map, expected tuple variant Animal::Frog at line 1 column 5"),
             ("{Cat[]}", "invalid length 0, expected struct variant Animal::Cat with 2 elements at line 1 column 6"),
             ("{Cat[0]}", "invalid length 1, expected struct variant Animal::Cat with 2 elements at line 1 column 7"),
-            ("{Cat[0, \"\", 2]}", "trailing characters at line 1 column 13"),
+            ("{Cat[0, \"\", 2]}", "trailing characters at line 1 column 11"),
             ("{Cat{age 5, name Kate, foo bar}",
              "unknown field `foo`, expected `age` or `name` at line 1 column 27"),
 
             // Scon does not allow more than one trailing comma in data structures
-            ("{Cat[0, \"Kate\",,]}", "trailing characters at line 1 column 16"),
+            ("{Cat[0, \"Kate\",,]}", "trailing characters at line 1 column 15"),
             ("{Cat{age 2, name Kate,,}}",
              "trailing comma at line 1 column 23"),
         ],
