@@ -491,23 +491,6 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         err.fix_position(move |code| self.error(code))
     }
 
-    fn parse_ident(&mut self, ident: &[u8]) -> Result<()> {
-        for expected in ident {
-            match tri!(self.next_char()) {
-                None => {
-                    return Err(self.error(ErrorCode::EofWhileParsingValue));
-                }
-                Some(next) => {
-                    if next != *expected {
-                        return Err(self.error(ErrorCode::ExpectedSomeIdent));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn parse_integer_or_inf(&mut self, positive: bool) -> Result<ParserNumber> {
         if tri!(self.peek_or_null()) == b'#' {
             Ok(ParserNumber::F64(f64::INFINITY))

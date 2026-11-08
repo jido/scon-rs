@@ -28,7 +28,7 @@ mod macros;
 use crate::private_test::NumberTestingExt as _;
 #[cfg(feature = "raw_value")]
 use ref_cast::RefCast;
-use serde::de::{self, IgnoredAny, IntoDeserializer};
+use serde::de::{self, IntoDeserializer};
 use serde::ser::{self, SerializeMap, SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf, Bytes};

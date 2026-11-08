@@ -59,14 +59,11 @@ impl Error {
             | ErrorCode::EofWhileParsingObject
             | ErrorCode::EofWhileParsingString
             | ErrorCode::EofWhileParsingValue => Category::Eof,
-            ErrorCode::ExpectedColon
             | ErrorCode::ExpectedListCommaOrEnd
             | ErrorCode::ExpectedObjectCommaOrEnd
-            | ErrorCode::ExpectedSomeIdent
             | ErrorCode::ExpectedSomeValue
             //| ErrorCode::ExpectedDoubleQuote
             | ErrorCode::ExpectedSingleQuote
-            | ErrorCode::InvalidEscape
             | ErrorCode::InvalidNumber
             | ErrorCode::NumberOutOfRange
             | ErrorCode::InvalidUnicodeCodePoint
@@ -251,17 +248,11 @@ pub(crate) enum ErrorCode {
     /// EOF while parsing a Scon value.
     EofWhileParsingValue,
 
-    /// Expected this character to be a `':'`.
-    ExpectedColon,
-
     /// Expected this character to be either a `','` or a `']'`.
     ExpectedListCommaOrEnd,
 
     /// Expected this character to be either a `','` or a `'}'`.
     ExpectedObjectCommaOrEnd,
-
-    /// Expected to parse either a `true`, `false`, or a `null`.
-    ExpectedSomeIdent,
 
     /// Expected this character to start a Scon value.
     ExpectedSomeValue,
@@ -271,9 +262,6 @@ pub(crate) enum ErrorCode {
 
     /// Expected this character to be a `'`.
     ExpectedSingleQuote,
-
-    /// Invalid hex escape code.
-    InvalidEscape,
 
     /// Invalid number.
     InvalidNumber,
@@ -351,14 +339,11 @@ impl Display for ErrorCode {
             ErrorCode::EofWhileParsingObject => f.write_str("EOF while parsing an object"),
             ErrorCode::EofWhileParsingString => f.write_str("EOF while parsing a string"),
             ErrorCode::EofWhileParsingValue => f.write_str("EOF while parsing a value"),
-            ErrorCode::ExpectedColon => f.write_str("expected `:`"),
             ErrorCode::ExpectedListCommaOrEnd => f.write_str("expected `,` or `]`"),
             ErrorCode::ExpectedObjectCommaOrEnd => f.write_str("expected `,` or `}`"),
-            ErrorCode::ExpectedSomeIdent => f.write_str("expected ident"),
             ErrorCode::ExpectedSomeValue => f.write_str("expected value"),
             //ErrorCode::ExpectedDoubleQuote => f.write_str("expected `\"`"),
             ErrorCode::ExpectedSingleQuote => f.write_str("expected `'`"),
-            ErrorCode::InvalidEscape => f.write_str("invalid escape"),
             ErrorCode::InvalidNumber => f.write_str("invalid number"),
             ErrorCode::NumberOutOfRange => f.write_str("number out of range"),
             ErrorCode::InvalidUnicodeCodePoint => f.write_str("invalid unicode code point"),
