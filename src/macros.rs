@@ -4,14 +4,14 @@
 /// # use serde_scon::scon;
 /// #
 /// let value = scon!({
-///     "code": 200,
-///     "success": true,
-///     "payload": {
-///         "features": [
+///     code 200,
+///     success *,
+///     payload{
+///         features[
 ///             "serde",
 ///             "scon"
 ///         ],
-///         "homepage": null
+///         homepage /
 ///     }
 /// });
 /// ```
@@ -30,10 +30,10 @@
 /// let features = vec!["serde", "scon"];
 ///
 /// let value = scon!({
-///     "code": code,
-///     "success": code == 200,
-///     "payload": {
-///         features[0]: features[1]
+///     code code,
+///     success code == 200,
+///     payload {
+///         (features[0]) features[1]
 ///     }
 /// });
 /// ```
@@ -85,19 +85,19 @@ macro_rules! scon_internal {
         $crate::__private::vec![$($elems),*]
     };
 
-    // Next element is `null`.
-    (@array [$($elems:expr,)*] null $($rest:tt)*) => {
-        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(null)] $($rest)*)
+    // Next element is null.
+    (@array [$($elems:expr,)*] / $($rest:tt)*) => {
+        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(/)] $($rest)*)
     };
 
-    // Next element is `true`.
-    (@array [$($elems:expr,)*] true $($rest:tt)*) => {
-        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(true)] $($rest)*)
+    // Next element is true.
+    (@array [$($elems:expr,)*] * $($rest:tt)*) => {
+        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(*)] $($rest)*)
     };
 
-    // Next element is `false`.
-    (@array [$($elems:expr,)*] false $($rest:tt)*) => {
-        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(false)] $($rest)*)
+    // Next element is false.
+    (@array [$($elems:expr,)*] ~ $($rest:tt)*) => {
+        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(~)] $($rest)*)
     };
 
     // Next element is an array.
@@ -143,9 +143,25 @@ macro_rules! scon_internal {
     // Done.
     (@object $object:ident () () ()) => {};
 
+    (@object $object:ident [($key:expr)] ($value:expr) , $($rest:tt)*) => {
+        // Fully parenthesised
+        let _ = $object.insert(($key).into(), $value);
+        $crate::scon_internal!(@object $object () ($($rest)*) ($($rest)*));
+    };
+
+    (@object $object:ident [($key:expr)] ($value:expr) $unexpected:tt $($rest:tt)*) => {
+        // Fully parenthesised
+        $crate::scon_unexpected!($unexpected);
+    };
+
+    (@object $object:ident [($key:expr)] ($value:expr)) => {
+        // Fully parenthesised
+        let _ = $object.insert(($key).into(), $value);
+    };
+    
     // Insert the current entry followed by trailing comma.
     (@object $object:ident [$($key:tt)+] ($value:expr) , $($rest:tt)*) => {
-        let _ = $object.insert(($($key)+).into(), $value);
+        let _ = $object.insert(stringify!($($key)+).into(), $value);
         $crate::scon_internal!(@object $object () ($($rest)*) ($($rest)*));
     };
 
@@ -156,50 +172,50 @@ macro_rules! scon_internal {
 
     // Insert the last entry without trailing comma.
     (@object $object:ident [$($key:tt)+] ($value:expr)) => {
-        let _ = $object.insert(($($key)+).into(), $value);
+        let _ = $object.insert(stringify!($($key)+).into(), $value);
     };
 
-    // Next value is `null`.
-    (@object $object:ident ($($key:tt)+) (: null $($rest:tt)*) $copy:tt) => {
-        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(null)) $($rest)*);
+    // Next value is null.
+    (@object $object:ident ($($key:tt)+) ( / $($rest:tt)*) $copy:tt) => {
+        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(/)) $($rest)*);
     };
 
-    // Next value is `true`.
-    (@object $object:ident ($($key:tt)+) (: true $($rest:tt)*) $copy:tt) => {
-        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(true)) $($rest)*);
+    // Next value is true.
+    (@object $object:ident ($($key:tt)+) ( * $($rest:tt)*) $copy:tt) => {
+        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(*)) $($rest)*);
     };
 
-    // Next value is `false`.
-    (@object $object:ident ($($key:tt)+) (: false $($rest:tt)*) $copy:tt) => {
-        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(false)) $($rest)*);
+    // Next value is false.
+    (@object $object:ident ($($key:tt)+) ( ~ $($rest:tt)*) $copy:tt) => {
+        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(~)) $($rest)*);
     };
 
     // Next value is an array.
-    (@object $object:ident ($($key:tt)+) (: [$($array:tt)*] $($rest:tt)*) $copy:tt) => {
+    (@object $object:ident ($($key:tt)+) ( [$($array:tt)*] $($rest:tt)*) $copy:tt) => {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!([$($array)*])) $($rest)*);
     };
 
     // Next value is a map.
-    (@object $object:ident ($($key:tt)+) (: {$($map:tt)*} $($rest:tt)*) $copy:tt) => {
+    (@object $object:ident ($($key:tt)+) ( {$($map:tt)*} $($rest:tt)*) $copy:tt) => {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!({$($map)*})) $($rest)*);
     };
 
     // Next value is an expression followed by comma.
-    (@object $object:ident ($($key:tt)+) (: $value:expr , $($rest:tt)*) $copy:tt) => {
+    (@object $object:ident ($($key:tt)+) ( $value:expr , $($rest:tt)*) $copy:tt) => {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!($value)) , $($rest)*);
     };
 
     // Last value is an expression with no trailing comma.
-    (@object $object:ident ($($key:tt)+) (: $value:expr) $copy:tt) => {
+    (@object $object:ident ($($key:tt)+) ( $value:expr) $copy:tt) => {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!($value)));
     };
 
     // Missing value for last entry. Trigger a reasonable error message.
-    (@object $object:ident ($($key:tt)+) (:) $copy:tt) => {
+    (@object $object:ident ($($key:tt)+) $copy:tt) => {
         // "unexpected end of macro invocation"
         $crate::scon_internal!();
     };
-
+    /*
     // Missing colon and value for last entry. Trigger a reasonable error
     // message.
     (@object $object:ident ($($key:tt)+) () $copy:tt) => {
@@ -209,6 +225,12 @@ macro_rules! scon_internal {
 
     // Misplaced colon. Trigger a reasonable error message.
     (@object $object:ident () (: $($rest:tt)*) ($colon:tt $($copy:tt)*)) => {
+        // Takes no arguments so "no rules expected the token `:`".
+        $crate::scon_unexpected!($colon);
+    };*/
+
+    // Found a colon inside a key. Trigger a reasonable error message.
+    (@object $object:ident ($($key:tt)*) (: $($rest:tt)*) ($colon:tt $($copy:tt)*)) => {
         // Takes no arguments so "no rules expected the token `:`".
         $crate::scon_unexpected!($colon);
     };
@@ -221,35 +243,35 @@ macro_rules! scon_internal {
 
     // Key is fully parenthesized. This avoids clippy double_parens false
     // positives because the parenthesization may be necessary here.
-    (@object $object:ident () (($key:expr) : $($rest:tt)*) $copy:tt) => {
-        $crate::scon_internal!(@object $object ($key) (: $($rest)*) (: $($rest)*));
+    (@object $object:ident () (($key:expr) $($rest:tt)*) $copy:tt) => {
+        $crate::scon_internal!(@object $object (($key)) ( $($rest)*) ( $($rest)*));
     };
-
+    /*
     // Refuse to absorb colon token into key expression.
-    (@object $object:ident ($($key:tt)*) (: $($unexpected:tt)+) $copy:tt) => {
+    (@object $object:ident ($($key:tt)*) ( $($unexpected:tt)+) $copy:tt) => {
         $crate::scon_expect_expr_comma!($($unexpected)+);
-    };
+    };*/
 
     // Munch a token into the current key.
     (@object $object:ident ($($key:tt)*) ($tt:tt $($rest:tt)*) $copy:tt) => {
         $crate::scon_internal!(@object $object ($($key)* $tt) ($($rest)*) ($($rest)*));
     };
-
+    
     //////////////////////////////////////////////////////////////////////////
     // The main implementation.
     //
     // Must be invoked as: scon_internal!($($scon)+)
     //////////////////////////////////////////////////////////////////////////
 
-    (null) => {
+    (/) => {
         $crate::Value::Null
     };
 
-    (true) => {
+    (*) => {
         $crate::Value::Bool(true)
     };
 
-    (false) => {
+    (~) => {
         $crate::Value::Bool(false)
     };
 

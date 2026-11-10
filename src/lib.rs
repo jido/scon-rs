@@ -183,9 +183,9 @@
 //! fn main() {
 //!     // The type of `john` is `serde_scon::Value`
 //!     let john = scon!({
-//!         "name": "John Doe",
-//!         "age": 43,
-//!         "phones": [
+//!         name "John Doe",
+//!         age 43,
+//!         phones[
 //!             "+44 1234567",
 //!             "+44 2345678"
 //!         ]
@@ -216,9 +216,9 @@
 //!
 //! // The type of `john` is `serde_scon::Value`
 //! let john = scon!({
-//!     "name": full_name,
-//!     "age": age_last_year + 1,
-//!     "phones": [
+//!     name full_name,
+//!     age age_last_year + 1,
+//!     phones[
 //!         format!("+44 {}", random_phone())
 //!     ]
 //! });

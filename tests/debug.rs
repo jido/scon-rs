@@ -15,13 +15,13 @@ fn number() {
 
 #[test]
 fn value_null() {
-    assert_eq!(format!("{:?}", scon!(null)), "Null");
+    assert_eq!(format!("{:?}", scon!(/)), "Null");
 }
 
 #[test]
 fn value_bool() {
-    assert_eq!(format!("{:?}", scon!(true)), "Bool(true)");
-    assert_eq!(format!("{:?}", scon!(false)), "Bool(false)");
+    assert_eq!(format!("{:?}", scon!(*)), "Bool(true)");
+    assert_eq!(format!("{:?}", scon!(~)), "Bool(false)");
 }
 
 #[test]
@@ -58,13 +58,13 @@ fn error() {
 #[test]
 fn indented() {
     let j = scon!({
-        "Array": [true],
-        "Bool": true,
-        "EmptyArray": [],
-        "EmptyObject": {},
-        "Null": null,
-        "Number": 1,
-        "String": "...",
+        Array[*],
+        Bool *,
+        EmptyArray[],
+        EmptyObject{},
+        Null /,
+        Number 1,
+        String "...",
     });
     let expected = indoc! {r#"
         Object {

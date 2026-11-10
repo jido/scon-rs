@@ -198,7 +198,7 @@ derive]* page of the Serde site.
 ## Constructing Scon values
 
 Serde Scon provides a [`scon!` macro][macro] to build `serde_scon::Value`
-objects with very natural JSON syntax.
+objects with natural Scon-like syntax.
 
 <div align="right">
 <a href="https://play.rust-lang.org/?edition=2018&gist=6ccafad431d72b62e77cc34c8e879b24" target="_blank">
@@ -212,9 +212,9 @@ use serde_scon::scon;
 fn main() {
     // The type of `john` is `serde_scon::Value`
     let john = scon!({
-        "name": "John Doe",
-        "age": 43,
-        "phones": [
+        name "John Doe",
+        age 43,
+        phones [
             "+44 1234567",
             "+44 2345678"
         ]
@@ -247,9 +247,9 @@ let age_last_year = 42;
 
 // The type of `john` is `serde_scon::Value`
 let john = scon!({
-    "name": full_name,
-    "age": age_last_year + 1,
-    "phones": [
+    name full_name,
+    age age_last_year + 1,
+    phones [
         format!("+44 {}", random_phone())
     ]
 });

@@ -11,9 +11,9 @@
 //! fn main() {
 //!     // The type of `john` is `serde_scon::Value`
 //!     let john = scon!({
-//!         "name": "John Doe",
-//!         "age": 43,
-//!         "phones": [
+//!         name "John Doe",
+//!         age 43,
+//!         phones[
 //!             "+44 1234567",
 //!             "+44 2345678"
 //!         ]
@@ -44,9 +44,9 @@
 //!
 //! // The type of `john` is `serde_scon::Value`
 //! let john = scon!({
-//!     "name": full_name,
-//!     "age": age_last_year + 1,
-//!     "phones": [
+//!     name full_name,
+//!     age age_last_year + 1,
+//!     phones[
 //!         format!("+44 {}", random_phone())
 //!     ]
 //! });
@@ -118,7 +118,7 @@ pub enum Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!(null);
+    /// let v = scon!( / );
     /// ```
     Null,
 
@@ -127,7 +127,7 @@ pub enum Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!(true);
+    /// let v = scon!( * );
     /// ```
     Bool(bool),
 
@@ -136,7 +136,7 @@ pub enum Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!(12.5);
+    /// let v = scon!( 12.5 );
     /// ```
     Number(Number),
 
@@ -145,7 +145,7 @@ pub enum Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!("a string");
+    /// let v = scon!( "a string" );
     /// ```
     String(String),
 
@@ -169,7 +169,7 @@ pub enum Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "an": "object" });
+    /// let v = scon!({ an "object" });
     /// ```
     Object(Map<String, Value>),
 }
@@ -199,7 +199,7 @@ impl Display for Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let scon = scon!({ "city": "London", "street": "10 Downing Street" });
+    /// let scon = scon!({ city "London", street "10 Downing Street" });
     ///
     /// // Compact format:
     /// //
@@ -275,11 +275,11 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let object = scon!({ "A": 65, "B": 66, "C": 67 });
-    /// assert_eq!(*object.get("A").unwrap(), scon!(65));
+    /// let object = scon!({ A 65, B 66, C 67 });
+    /// assert_eq!(*object.get("A").unwrap(), scon!( 65 ));
     ///
     /// let array = scon!([ "A", "B", "C" ]);
-    /// assert_eq!(*array.get(2).unwrap(), scon!("C"));
+    /// assert_eq!(*array.get(2).unwrap(), scon!( "C" ));
     ///
     /// assert_eq!(array.get("A"), None);
     /// ```
@@ -292,14 +292,14 @@ impl Value {
     /// # use serde_scon::scon;
     /// #
     /// let object = scon!({
-    ///     "A": ["a", "á", "à"],
-    ///     "B": ["b", "b́"],
-    ///     "C": ["c", "ć", "ć̣", "ḉ"],
+    ///     A["a", "á", "à"],
+    ///     B["b", "b́"],
+    ///     C["c", "ć", "ć̣", "ḉ"],
     /// });
-    /// assert_eq!(object["B"][0], scon!("b"));
+    /// assert_eq!(object["B"][0], scon!( "b" ));
     ///
-    /// assert_eq!(object["D"], scon!(null));
-    /// assert_eq!(object[0]["x"]["y"]["z"], scon!(null));
+    /// assert_eq!(object["D"], scon!( / ));
+    /// assert_eq!(object[0]["x"]["y"]["z"], scon!( / ));
     /// ```
     pub fn get<I: Index>(&self, index: I) -> Option<&Value> {
         index.index_into(self)
@@ -317,8 +317,8 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let mut object = scon!({ "A": 65, "B": 66, "C": 67 });
-    /// *object.get_mut("A").unwrap() = scon!(69);
+    /// let mut object = scon!({ A 65, B 66, C 67 });
+    /// *object.get_mut("A").unwrap() = scon!( 69 );
     ///
     /// let mut array = scon!([ "A", "B", "C" ]);
     /// *array.get_mut(2).unwrap() = scon!("D");
@@ -336,7 +336,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let obj = scon!({ "a": { "nested": true }, "b": ["an", "array"] });
+    /// let obj = scon!({ a{ nested * }, b["an", "array"] });
     ///
     /// assert!(obj.is_object());
     /// assert!(obj["a"].is_object());
@@ -354,7 +354,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": { "nested": true }, "b": ["an", "array"] });
+    /// let v = scon!({ a{ nested * }, b["an", "array"] });
     ///
     /// // The length of `{"nested": true}` is 1 entry.
     /// assert_eq!(v["a"].as_object().unwrap().len(), 1);
@@ -375,10 +375,10 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let mut v = scon!({ "a": { "nested": true } });
+    /// let mut v = scon!({ a{ nested * } });
     ///
     /// v["a"].as_object_mut().unwrap().clear();
-    /// assert_eq!(v, scon!({ "a": {} }));
+    /// assert_eq!(v, scon!({ a{} }));
     /// ```
     pub fn as_object_mut(&mut self) -> Option<&mut Map<String, Value>> {
         match self {
@@ -396,7 +396,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let obj = scon!({ "a": ["an", "array"], "b": { "an": "object" } });
+    /// let obj = scon!({ a["an", "array"], b{ an "object" } });
     ///
     /// assert!(obj["a"].is_array());
     ///
@@ -413,7 +413,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": ["an", "array"], "b": { "an": "object" } });
+    /// let v = scon!({ a["an", "array"], b{ an "object" } });
     ///
     /// // The length of `["an", "array"]` is 2 elements.
     /// assert_eq!(v["a"].as_array().unwrap().len(), 2);
@@ -434,10 +434,10 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let mut v = scon!({ "a": ["an", "array"] });
+    /// let mut v = scon!({ a["an", "array"] });
     ///
     /// v["a"].as_array_mut().unwrap().clear();
-    /// assert_eq!(v, scon!({ "a": [] }));
+    /// assert_eq!(v, scon!({ a[] }));
     /// ```
     pub fn as_array_mut(&mut self) -> Option<&mut Vec<Value>> {
         match self {
@@ -454,7 +454,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": "some string", "b": false });
+    /// let v = scon!({ a "some string", b ~ });
     ///
     /// assert!(v["a"].is_string());
     ///
@@ -471,7 +471,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": "some string", "b": false });
+    /// let v = scon!({ a "some string", b ~ });
     ///
     /// assert_eq!(v["a"].as_str(), Some("some string"));
     ///
@@ -500,7 +500,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": 1, "b": "2" });
+    /// let v = scon!({ a 1, b "2" });
     ///
     /// assert!(v["a"].is_number());
     ///
@@ -520,7 +520,7 @@ impl Value {
     /// ```
     /// # use serde_scon::{scon, Number};
     /// #
-    /// let v = scon!({ "a": 1, "b": 2.2, "c": -3, "d": "4" });
+    /// let v = scon!({ a 1, b 2.2, c -3, d "4" });
     ///
     /// assert_eq!(v["a"].as_number(), Some(&Number::from(1u64)));
     /// assert_eq!(v["b"].as_number(), Some(&Number::from_f64(2.2).unwrap()));
@@ -546,7 +546,7 @@ impl Value {
     /// # use serde_scon::scon;
     /// #
     /// let big = i64::max_value() as u64 + 10;
-    /// let v = scon!({ "a": 64, "b": big, "c": 256.0 });
+    /// let v = scon!({ a 64, b big, c 256.0 });
     ///
     /// assert!(v["a"].is_i64());
     ///
@@ -571,7 +571,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": 64, "b": -64, "c": 256.0 });
+    /// let v = scon!({ a 64, b -64, c 256.0 });
     ///
     /// assert!(v["a"].is_u64());
     ///
@@ -599,7 +599,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": 256.0, "b": 64, "c": -64 });
+    /// let v = scon!({ a 256.0, b 64, c -64 });
     ///
     /// assert!(v["a"].is_f64());
     ///
@@ -621,7 +621,7 @@ impl Value {
     /// # use serde_scon::scon;
     /// #
     /// let big = i64::max_value() as u64 + 10;
-    /// let v = scon!({ "a": 64, "b": big, "c": 256.0 });
+    /// let v = scon!({ a 64, b big, c 256.0 });
     ///
     /// assert_eq!(v["a"].as_i64(), Some(64));
     /// assert_eq!(v["b"].as_i64(), None);
@@ -640,7 +640,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": 64, "b": -64, "c": 256.0 });
+    /// let v = scon!({ a 64, b -64, c 256.0 });
     ///
     /// assert_eq!(v["a"].as_u64(), Some(64));
     /// assert_eq!(v["b"].as_u64(), None);
@@ -659,7 +659,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": 256.0, "b": 64, "c": -64 });
+    /// let v = scon!({ a 256.0, b 64, c -64 });
     ///
     /// assert_eq!(v["a"].as_f64(), Some(256.0));
     /// assert_eq!(v["b"].as_f64(), Some(64.0));
@@ -680,7 +680,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": false, "b": "false" });
+    /// let v = scon!({ a ~, b "false" });
     ///
     /// assert!(v["a"].is_boolean());
     ///
@@ -697,7 +697,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": false, "b": "false" });
+    /// let v = scon!({ a ~, b "false" });
     ///
     /// assert_eq!(v["a"].as_bool(), Some(false));
     ///
@@ -719,7 +719,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": null, "b": false });
+    /// let v = scon!({ a /, b ~ });
     ///
     /// assert!(v["a"].is_null());
     ///
@@ -735,7 +735,7 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let v = scon!({ "a": null, "b": false });
+    /// let v = scon!({ a /, b ~ });
     ///
     /// assert_eq!(v["a"].as_null(), Some(()));
     ///
@@ -767,8 +767,8 @@ impl Value {
     /// # use serde_scon::scon;
     /// #
     /// let data = scon!({
-    ///     "x": {
-    ///         "y": ["z", "zz"]
+    ///     x{
+    ///         y["z", "zz"]
     ///     }
     /// });
     ///
@@ -853,9 +853,9 @@ impl Value {
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let mut v = scon!({ "x": "y" });
+    /// let mut v = scon!({ x "y" });
     /// assert_eq!(v["x"].take(), scon!("y"));
-    /// assert_eq!(v, scon!({ "x": null }));
+    /// assert_eq!(v, scon!({ x / }));
     /// ```
     pub fn take(&mut self) -> Value {
         mem::replace(self, Value::Null)
@@ -960,8 +960,8 @@ mod ser;
 ///
 ///     // The type of `expected` is `serde_scon::Value`
 ///     let expected = scon!({
-///         "fingerprint": "0xF9BA143B95FF6D82",
-///         "location": "Menlo Park, CA",
+///         fingerprint "0xF9BA143B95FF6D82",
+///         location "Menlo Park, CA",
 ///     });
 ///
 ///     let v = serde_scon::to_value(u).unwrap();
@@ -1015,8 +1015,8 @@ where
 /// fn main() {
 ///     // The type of `j` is `serde_scon::Value`
 ///     let j = scon!({
-///         "fingerprint": "0xF9BA143B95FF6D82",
-///         "location": "Menlo Park, CA"
+///         fingerprint "0xF9BA143B95FF6D82",
+///         location "Menlo Park, CA"
 ///     });
 ///
 ///     let u: User = serde_scon::from_value(j).unwrap();

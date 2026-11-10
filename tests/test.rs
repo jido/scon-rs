@@ -260,7 +260,7 @@ fn test_write_list() {
         (vec![true, false], pretty_str!([true, false])),
     ]);
 
-    let long_test_list = scon!([false, null, ["foo
+    let long_test_list = scon!([~, /, ["foo
 bar", 3.5]]);
 
     test_encode_ok(&[(
@@ -456,9 +456,9 @@ fn test_write_object() {
     ]);
 
     let complex_obj = scon!({
-        "b": [
-            {"c": "\x0c\x1f\r"},
-            {"d": ""}
+        b[
+            {c "\x0c\x1f\r"},
+            {d ""}
         ]
     });
 
@@ -1327,7 +1327,7 @@ fn test_parse_struct() {
         }
     );
 
-    let j = scon!([null, 2, []]);
+    let j = scon!([/, 2, []]);
     Inner::deserialize(&j).unwrap();
     Inner::deserialize(j).unwrap();
 }
@@ -1470,7 +1470,7 @@ fn test_missing_option_field() {
     let value: Foo = from_value(scon!({})).unwrap();
     assert_eq!(value, Foo { x: None });
 
-    let value: Foo = from_value(scon!({"x": 5})).unwrap();
+    let value: Foo = from_value(scon!({x 5})).unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 }
 
@@ -1501,7 +1501,7 @@ fn test_missing_renamed_field() {
     let value: Foo = from_value(scon!({})).unwrap();
     assert_eq!(value, Foo { x: None });
 
-    let value: Foo = from_value(scon!({"y": 5})).unwrap();
+    let value: Foo = from_value(scon!({y 5})).unwrap();
     assert_eq!(value, Foo { x: Some(5) });
 }
 
@@ -1936,11 +1936,11 @@ fn test_scon_pointer_mut() {
     // Example of ownership stealing
     assert_eq!(
         data.pointer_mut("/a~1b")
-            .map(|m| mem::replace(m, scon!(null)))
+            .map(|m| mem::replace(m, scon!(/)))
             .unwrap(),
         1
     );
-    assert_eq!(data.pointer("/a~1b").unwrap(), &scon!(null));
+    assert_eq!(data.pointer("/a~1b").unwrap(), &scon!(/));
 
     // Need to compare against a clone so we don't anger the borrow checker
     // by taking out two references to a mutable value
@@ -1995,14 +1995,14 @@ fn test_integer_key() {
         ),
         (r#"{'123 '/}"#, "expected `\'` at line 1 column 6"),
     ]);
-
-    let err = from_value::<BTreeMap<i32, ()>>(scon!({" 123":null})).unwrap_err();
+    
+    let err = from_value::<BTreeMap<i32, ()>>(scon!({(" 123") /})).unwrap_err();
     assert_eq!(
         err.to_string(),
         "invalid value: expected key to be a number in quotes",
     );
-
-    let err = from_value::<BTreeMap<i32, ()>>(scon!({"123 ":null})).unwrap_err();
+    
+    let err = from_value::<BTreeMap<i32, ()>>(scon!({("123 ") /})).unwrap_err();
     assert_eq!(
         err.to_string(),
         "invalid value: expected key to be a number in quotes",
@@ -2172,18 +2172,18 @@ fn test_scon_macro() {
 
     // Same thing but in the map values.
     let _ = scon!({
-        "ok": <Result<(), ()> as Clone>::clone(&Ok(())),
-        "err": <Result<(), ()> as Clone>::clone(&Err(()))
+        ok <Result<(), ()> as Clone>::clone(&Ok(())),
+        err <Result<(), ()> as Clone>::clone(&Err(()))
     });
-
+    
     // It works in map keys but only if they are parenthesized.
     let _ = scon!({
-        (<Result<&str, ()> as Clone>::clone(&Ok("")).unwrap()): "ok",
-        (<Result<(), &str> as Clone>::clone(&Err("")).unwrap_err()): "err"
+        (<Result<&str, ()> as Clone>::clone(&Ok("")).unwrap()) "ok",
+        (<Result<(), &str> as Clone>::clone(&Err("")).unwrap_err()) "err"
     });
 
     #[deny(unused_results)]
-    let _ = scon!({ "architecture": [true, null] });
+    let _ = scon!({ architecture [*, /] });
 }
 
 #[test]
@@ -2414,14 +2414,14 @@ fn test_borrowed_raw_value() {
     assert_eq!(r#"{"a":1,"b":{"foo": 2},"c":3}"#, wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
-    assert_eq!(scon!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
+    assert_eq!(scon!({a 1, b{foo 2}, c 3}), wrapper_to_value);
 
     let array_from_str: Vec<&RawValue> =
-        serde_scon::from_str(r#"["a", 42, {"foo": "bar"}, null]"#).unwrap();
+        serde_scon::from_str(r#"["a", 42, {foo"bar"}, /]"#).unwrap();
     assert_eq!(r#""a""#, array_from_str[0].get());
     assert_eq!("42", array_from_str[1].get());
     assert_eq!(r#"{"foo": "bar"}"#, array_from_str[2].get());
-    assert_eq!("null", array_from_str[3].get());
+    assert_eq!("/", array_from_str[3].get());
 
     let array_to_string = serde_scon::to_string(&array_from_str).unwrap();
     assert_eq!(r#"["a",42,{"foo": "bar"},null]"#, array_to_string);
@@ -2478,39 +2478,39 @@ fn test_boxed_raw_value() {
     }
 
     let wrapper_from_str: Wrapper =
-        serde_scon::from_str(r#"{"a": 1, "b": {"foo": 2}, "c": 3}"#).unwrap();
-    assert_eq!(r#"{"foo": 2}"#, wrapper_from_str.b.get());
+        serde_scon::from_str(r#"{a 1, b{foo 2}, c 3}"#).unwrap();
+    assert_eq!(r#"{foo 2}"#, wrapper_from_str.b.get());
 
     let wrapper_from_reader: Wrapper =
-        serde_scon::from_reader(br#"{"a": 1, "b": {"foo": 2}, "c": 3}"#.as_ref()).unwrap();
-    assert_eq!(r#"{"foo": 2}"#, wrapper_from_reader.b.get());
+        serde_scon::from_reader(br#"{a 1, b{foo 2}, c 3}"#.as_ref()).unwrap();
+    assert_eq!(r#"{foo 2}"#, wrapper_from_reader.b.get());
 
     let wrapper_from_value: Wrapper =
-        serde_scon::from_value(scon!({"a": 1, "b": {"foo": 2}, "c": 3})).unwrap();
-    assert_eq!(r#"{"foo":2}"#, wrapper_from_value.b.get());
+        serde_scon::from_value(scon!({a 1, b{foo 2}, c 3})).unwrap();
+    assert_eq!(r#"{foo 2}"#, wrapper_from_value.b.get());
 
     let wrapper_to_string = serde_scon::to_string(&wrapper_from_str).unwrap();
-    assert_eq!(r#"{"a":1,"b":{"foo": 2},"c":3}"#, wrapper_to_string);
+    assert_eq!(r#"{a 1,b{foo 2},c 3}"#, wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
-    assert_eq!(scon!({"a": 1, "b": {"foo": 2}, "c": 3}), wrapper_to_value);
+    assert_eq!(scon!({a 1, b{foo 2}, c 3}), wrapper_to_value);
 
     let array_from_str: Vec<Box<RawValue>> =
-        serde_scon::from_str(r#"["a", 42, {"foo": "bar"}, null]"#).unwrap();
-    assert_eq!(r#""a""#, array_from_str[0].get());
+        serde_scon::from_str(r#"[`a, 42, {foo bar}, /]"#).unwrap();
+    assert_eq!(r#"`a"#, array_from_str[0].get());
     assert_eq!("42", array_from_str[1].get());
-    assert_eq!(r#"{"foo": "bar"}"#, array_from_str[2].get());
-    assert_eq!("null", array_from_str[3].get());
+    assert_eq!(r#"{foo bar}"#, array_from_str[2].get());
+    assert_eq!("/", array_from_str[3].get());
 
     let array_from_reader: Vec<Box<RawValue>> =
-        serde_scon::from_reader(br#"["a", 42, {"foo": "bar"}, null]"#.as_ref()).unwrap();
-    assert_eq!(r#""a""#, array_from_reader[0].get());
+        serde_scon::from_reader(br#"[`a, 42, {foo bar}, /]"#.as_ref()).unwrap();
+    assert_eq!("`a", array_from_reader[0].get());
     assert_eq!("42", array_from_reader[1].get());
-    assert_eq!(r#"{"foo": "bar"}"#, array_from_reader[2].get());
-    assert_eq!("null", array_from_reader[3].get());
+    assert_eq!("{foo bar}", array_from_reader[2].get());
+    assert_eq!("/", array_from_reader[3].get());
 
     let array_to_string = serde_scon::to_string(&array_from_str).unwrap();
-    assert_eq!(r#"["a",42,{"foo": "bar"},null]"#, array_to_string);
+    assert_eq!(r#"[`a,42,{foo bar},/]"#, array_to_string);
 }
 
 #[cfg(feature = "raw_value")]
@@ -2611,7 +2611,7 @@ fn test_borrow_in_map_key() {
         }
     }
 
-    let value = scon!({ "map": { "1": null } });
+    let value = scon!({ map{ ("1") / } });
     Outer::deserialize(&value).unwrap();
 }
 
@@ -2628,7 +2628,7 @@ fn test_value_into_deserializer() {
     }
 
     let mut map = BTreeMap::new();
-    map.insert("inner", scon!({ "string": "Hello World" }));
+    map.insert("inner", scon!({ string "Hello World" }));
 
     let outer = Outer::deserialize(serde::de::value::MapDeserializer::new(
         map.iter().map(|(k, v)| (*k, v)),

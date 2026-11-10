@@ -54,9 +54,9 @@ impl<'de> Deserialize<'de> for Enum {
 
 #[test]
 fn test() {
-    let s = r#" {"Variant":{"x":0,"y":0}} "#;
+    let s = "{Variant{x 0,y 0}} ";
     assert!(serde_scon::from_str::<Enum>(s).is_err());
 
-    let j = scon!({"Variant":{"x":0,"y":0}});
+    let j = scon!({Variant{x 0,y 0}});
     assert!(serde_scon::from_value::<Enum>(j).is_err());
 }

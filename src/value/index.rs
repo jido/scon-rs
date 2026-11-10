@@ -24,7 +24,7 @@ use core::ops;
 /// ```
 /// # use serde_scon::scon;
 /// #
-/// let data = scon!({ "inner": [1, 2, 3] });
+/// let data = scon!({ inner [1, 2, 3] });
 ///
 /// // Data is a Scon map so it can be indexed with a string.
 /// let inner = &data["inner"];
@@ -198,16 +198,16 @@ where
     /// # use serde_scon::scon;
     /// #
     /// let data = scon!({
-    ///     "x": {
-    ///         "y": ["z", "zz"]
+    ///     x{
+    ///         y["z", "zz"]
     ///     }
     /// });
     ///
     /// assert_eq!(data["x"]["y"], scon!(["z", "zz"]));
     /// assert_eq!(data["x"]["y"][0], scon!("z"));
     ///
-    /// assert_eq!(data["a"], scon!(null)); // returns null for undefined values
-    /// assert_eq!(data["a"]["b"], scon!(null)); // does not panic
+    /// assert_eq!(data["a"], scon!( / )); // returns null for undefined values
+    /// assert_eq!(data["a"]["b"], scon!( / )); // does not panic
     /// ```
     fn index(&self, index: I) -> &Value {
         static NULL: Value = Value::Null;
@@ -236,19 +236,19 @@ where
     /// ```
     /// # use serde_scon::scon;
     /// #
-    /// let mut data = scon!({ "x": 0 });
+    /// let mut data = scon!({ x 0 });
     ///
     /// // replace an existing key
     /// data["x"] = scon!(1);
     ///
     /// // insert a new key
-    /// data["y"] = scon!([false, false, false]);
+    /// data["y"] = scon!([ ~, ~, ~ ]);
     ///
     /// // replace an array value
-    /// data["y"][0] = scon!(true);
+    /// data["y"][0] = scon!( * );
     ///
     /// // inserted a deeply nested key
-    /// data["a"]["b"]["c"]["d"] = scon!(true);
+    /// data["a"]["b"]["c"]["d"] = scon!( * );
     ///
     /// println!("{}", data);
     /// ```
