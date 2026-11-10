@@ -100,6 +100,11 @@ macro_rules! scon_internal {
         $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(~)] $($rest)*)
     };
 
+    // Next element is NaN.
+    (@array [$($elems:expr,)*] ? $($rest:tt)*) => {
+        $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!(?)] $($rest)*)
+    };
+
     // Next element is an array.
     (@array [$($elems:expr,)*] [$($array:tt)*] $($rest:tt)*) => {
         $crate::scon_internal!(@array [$($elems,)* $crate::scon_internal!([$($array)*])] $($rest)*)
@@ -190,6 +195,11 @@ macro_rules! scon_internal {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(~)) $($rest)*);
     };
 
+    // Next value is NaN.
+    (@object $object:ident ($($key:tt)+) ( ? $($rest:tt)*) $copy:tt) => {
+        $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!(?)) $($rest)*);
+    };
+
     // Next value is an array.
     (@object $object:ident ($($key:tt)+) ( [$($array:tt)*] $($rest:tt)*) $copy:tt) => {
         $crate::scon_internal!(@object $object [$($key)+] ($crate::scon_internal!([$($array)*])) $($rest)*);
@@ -273,6 +283,10 @@ macro_rules! scon_internal {
 
     (~) => {
         $crate::Value::Bool(false)
+    };
+
+    (?) => {
+        $crate::Value::NaN
     };
 
     ([]) => {

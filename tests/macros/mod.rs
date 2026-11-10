@@ -13,20 +13,23 @@ macro_rules! scon_str {
     ({}) => {
         "{}"
     };
-    ({ $k0:tt : $v0:tt $(, $k:tt : $v:tt)* $(,)? }) => {
+    ({ $k0:tt $v0:tt $(, $k:tt $v:tt)* $(,)? }) => {
         concat!("{",
             stringify!($k0), scon_str!($v0),
             $(",", stringify!($k), scon_str!($v),)*
         "}")
     };
-    (true) => {
+    (*) => {
         "*"
     };
-    (false) => {
+    (~) => {
         "~"
     };
-    (null) => {
+    (/) => {
         "/"
+    };
+    (?) => {
+        "?"
     };
     ((($other:tt))) => {
         concat!("`", stringify($other))
@@ -58,20 +61,23 @@ macro_rules! pretty_str_impl {
     ($indent:expr, {}) => {
         "{}"
     };
-    ($indent:expr, { $k0:tt : $v0:tt $(, $k:tt : $v:tt)* $(,)? }) => {
+    ($indent:expr, { $k0:tt $v0:tt $(, $k:tt $v:tt)* $(,)? }) => {
         concat!("{\n ",
             $indent, stringify!($k0), pretty_str_impl!(concat!(" ", $indent), $v0),
             $("\n ", $indent, stringify!($k), pretty_str_impl!(concat!(" ", $indent), $v),)*
         "\n", $indent, "}")
     };
-    ($indent:expr, true) => {
+    ($indent:expr, *) => {
         "*"
     };
-    ($indent:expr, false) => {
+    ($indent:expr, ~) => {
         "~"
     };
-    ($indent:expr, null) => {
+    ($indent:expr, /) => {
         "/"
+    };
+    ($indent:expr, ?) => {
+        "?"
     };
     ($indent:expr, (($other:tt))) => {
         concat!("`", stringify!($other))

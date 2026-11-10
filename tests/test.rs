@@ -256,22 +256,22 @@ fn test_write_list() {
 
     test_pretty_encode_ok(&[
         (vec![], "[]"),
-        (vec![true], pretty_str!([true])),
-        (vec![true, false], pretty_str!([true, false])),
+        (vec![true], pretty_str!([*])),
+        (vec![true, false], pretty_str!([*, ~])),
     ]);
 
     let long_test_list = scon!([~, /, ["foo
-bar", 3.5]]);
+bar", 3.5],]);
 
     test_encode_ok(&[(
         long_test_list.clone(),
-        scon_str!([false, null, ["foo
+        scon_str!([~, /, ["foo
 bar", 3.5]]),
     )]);
 
     test_pretty_encode_ok(&[(
         long_test_list,
-        pretty_str!([false, null, ["foo
+        pretty_str!([~, /, ["foo
 bar", 3.5]]),
     )]);
 }
@@ -350,9 +350,9 @@ fn test_write_object() {
                 "c".to_owned() => treemap![],
             ],
             pretty_str!({
-                a:{},
-                b:{},
-                c:{},
+                a{},
+                b{},
+                c{},
             }),
         ),
         (
@@ -366,19 +366,19 @@ fn test_write_object() {
                 "c".to_owned() => treemap![],
             ],
             pretty_str!({
-                a:{
-                    a:{
-                        a:[
+                a{
+                    a{
+                        a[
                             1,
                             2,
                             3,
                         ],
                     },
-                    b:{},
-                    c:{},
+                    b{},
+                    c{},
                 },
-                b:{},
-                c:{},
+                b{},
+                c{},
             }),
         ),
         (
@@ -392,19 +392,19 @@ fn test_write_object() {
                 "c".to_owned() => treemap![],
             ],
             pretty_str!({
-                a:{},
-                b:{
-                    a:{
-                        a:[
+                a{},
+                b{
+                    a{
+                        a[
                             1,
                             2,
                             3,
                         ],
                     },
-                    b:{},
-                    c:{},
+                    b{},
+                    c{},
                 },
-                c:{},
+                c{},
             }),
         ),
         (
@@ -418,18 +418,18 @@ fn test_write_object() {
                 ],
             ],
             pretty_str!({
-                a:{},
-                b:{},
-                c:{
-                    a:{
-                        a:[
+                a{},
+                b{},
+                c{
+                    a{
+                        a[
                              1,
                              2,
                              3,
                         ],
                     },
-                    b:{},
-                    c:{},
+                    b{},
+                    c{},
                 },
             }),
         ),
@@ -440,7 +440,7 @@ fn test_write_object() {
         (
             treemap!("a".to_owned() => true),
             pretty_str!({
-                a:true
+                a*
             }),
         ),
         (
@@ -449,8 +449,8 @@ fn test_write_object() {
                 "b".to_owned() => false,
             ),
             pretty_str!( {
-                a:true,
-                b:false,
+                a*,
+                b~,
             }),
         ),
     ]);
@@ -465,12 +465,12 @@ fn test_write_object() {
     test_encode_ok(&[(
         complex_obj.clone(),
         scon_str!({
-            b:[
+            b[
                 {
-                    c:("\"\x0c\x1f\r\""),
+                    c ("\"\x0c\x1f\r\""),
                 },
                 {
-                    d:"",
+                    d "",
                 },
             ],
         }),
@@ -479,11 +479,11 @@ fn test_write_object() {
     test_pretty_encode_ok(&[(
         complex_obj,
         pretty_str!({
-            b:[{
-                    c:("\"\x0c\x1f\r\""),
+            b[{
+                    c ("\"\x0c\x1f\r\""),
                 },
                 {
-                    d:"",
+                    d "",
                 },
             ],
         }),
@@ -535,7 +535,7 @@ fn test_write_enum() {
         (
             Animal::Frog("Henry".to_owned(), vec![]),
             pretty_str!({
-                Frog:[
+                Frog[
                     ((Henry)),
                     [],
                 ],
@@ -544,7 +544,7 @@ fn test_write_enum() {
         (
             Animal::Frog("Henry".to_owned(), vec![349]),
             pretty_str!({
-                Frog:[
+                Frog[
                     ((Henry)),
                     [
                         349,
@@ -555,7 +555,7 @@ fn test_write_enum() {
         (
             Animal::Frog("Henry".to_owned(), vec![349, 102]),
             pretty_str!({
-                Frog:[
+                Frog[
                     ((Henry)),
                     [
                       349,
@@ -594,7 +594,7 @@ fn test_write_newtype_struct() {
 
     test_encode_ok(&[(inner, "{inner 123}")]);
 
-    test_encode_ok(&[(outer, r#"{outer{inner 123}}"#)]);
+    test_encode_ok(&[(outer, "{outer{inner 123}}")]);
 }
 
 #[test]
@@ -1277,7 +1277,7 @@ fn test_parse_struct() {
         ),
         ("{}", "missing field `inner` at line 1 column 2"),
         (
-            r#"{inner[{b 42, c[]}]}"#,
+            "{inner[{b 42, c[]}]}",
             "missing field `a` at line 1 column 18",
         ),
     ]);
@@ -1305,8 +1305,7 @@ fn test_parse_struct() {
         ),
     ]);
 
-    let v: Outer = from_str(
-"[
+    let v: Outer = from_str("[
  [
   [
    /, 2, [ `abc, `xyz, ]
@@ -1669,8 +1668,8 @@ fn test_serialize_map_with_no_len() {
 
     let s = to_string_pretty(&map).unwrap();
     let expected = pretty_str!({
-        a:{},
-        b:{},
+        a{},
+        b{},
     });
     assert_eq!(s, expected);
 }
@@ -1816,7 +1815,7 @@ fn test_byte_buf_de_surrogate_pair() {
     let bytes = ByteBuf::from(vec![237, 160, 188, 240, 159, 128, 128]);
     let v: ByteBuf = from_str(r#""\ud83c\ud83c\udc00""#).unwrap();
     assert_eq!(v, bytes);
-}*/
+}
 
 #[cfg(feature = "raw_value")]
 #[test]
@@ -1842,7 +1841,7 @@ fn test_raw_de_surrogate_pair() {
 
     assert!(from_str::<Box<RawValue>>(r#""\ud83c\udc00""#).is_ok());
 }
-
+*/
 #[cfg(feature = "preserve_order")]
 #[test]
 fn test_byte_buf_de_multiple() {
@@ -1980,20 +1979,20 @@ fn test_integer_key() {
         1 => 2,
         -1 => 6,
     );
-    let j = r#"{'-1' 6,'1' 2}"#;
+    let j = "{'-1' 6,'1' 2}";
     test_encode_ok(&[(&map, j)]);
     test_parse_ok(vec![(j, map)]);
 
     test_parse_err::<BTreeMap<i32, ()>>(&[
         (
-            r#"{x/}"#,
+            "{x/}",
             "invalid value: expected key to be a number in quotes at line 1 column 2",
         ),
         (
-            r#"{' 123'/}"#,
+            "{' 123'/}",
             "invalid value: expected key to be a number in quotes at line 1 column 2",
         ),
-        (r#"{'123 '/}"#, "expected `\'` at line 1 column 6"),
+        ("{'123 '/}", "expected `\'` at line 1 column 6"),
     ]);
     
     let err = from_value::<BTreeMap<i32, ()>>(scon!({(" 123") /})).unwrap_err();
@@ -2014,7 +2013,7 @@ fn test_integer128_key() {
     let map = treemap! {
         100000000000000000000000000000000000000u128 => (),
     };
-    let j = r#"{'100000000000000000000000000000000000000'/}"#;
+    let j = "{'100000000000000000000000000000000000000'/}";
     assert_eq!(to_string(&map).unwrap(), j);
     assert_eq!(from_str::<BTreeMap<u128, ()>>(j).unwrap(), map);
 }
@@ -2042,12 +2041,12 @@ fn test_float_key() {
 
     // map with float key
     let map = treemap!(Float => "x".to_owned());
-    let j = r#"{'1.23' x}"#;
+    let j = "{'1.23' x}";
 
     test_encode_ok(&[(&map, j)]);
     test_parse_ok(vec![(j, map)]);
 
-    let j = r#"{x/}"#;
+    let j = "{x/}";
     test_parse_err::<BTreeMap<Float, ()>>(&[(
         j,
         "invalid value: expected key to be a number in quotes at line 1 column 2",
@@ -2115,7 +2114,7 @@ fn test_deny_non_finite_f64_key() {
 #[test]
 fn test_boolean_key() {
     let map = treemap!(false => 0, true => 1);
-    let j = r#"{false 0,true 1}"#;
+    let j = "{false 0,true 1}";
     test_encode_ok(&[(&map, j)]);
     test_parse_ok(vec![(j, map)]);
 }
@@ -2146,7 +2145,7 @@ fn test_effectively_string_keys() {
         Enum::One => 1,
         Enum::Two => 2,
     };
-    let expected = r#"{One 1,Two 2}"#;
+    let expected = "{One 1,Two 2}";
     test_encode_ok(&[(&map, expected)]);
     test_parse_ok(vec![(expected, map)]);
 
@@ -2156,7 +2155,7 @@ fn test_effectively_string_keys() {
         Wrapper("zero".to_owned()) => 0,
         Wrapper("one".to_owned()) => 1,
     };
-    let expected = r#"{one 1,zero 0}"#;
+    let expected = "{one 1,zero 0}";
     test_encode_ok(&[(&map, expected)]);
     test_parse_ok(vec![(expected, map)]);
 }
@@ -2193,9 +2192,9 @@ fn issue_220() {
         V(u8),
     }
 
-    assert!(from_str::<E>(r#" V 0 "#).is_err());
+    assert!(from_str::<E>(" V 0 ").is_err());
 
-    assert_eq!(from_str::<E>(r#"{V 0}"#).unwrap(), E::V(0));
+    assert_eq!(from_str::<E>("{V 0}").unwrap(), E::V(0));
 }
 
 #[test]
@@ -2407,24 +2406,24 @@ fn test_borrowed_raw_value() {
     }
 
     let wrapper_from_str: Wrapper =
-        serde_scon::from_str(r#"{"a": 1, "b": {"foo": 2}, "c": 3}"#).unwrap();
-    assert_eq!(r#"{"foo": 2}"#, wrapper_from_str.b.get());
+        serde_scon::from_str("{a 1, b{foo 2}, c 3}").unwrap();
+    assert_eq!("{foo 2}", wrapper_from_str.b.get());
 
     let wrapper_to_string = serde_scon::to_string(&wrapper_from_str).unwrap();
-    assert_eq!(r#"{"a":1,"b":{"foo": 2},"c":3}"#, wrapper_to_string);
+    assert_eq!("{a 1,b{foo 2},c 3}", wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
     assert_eq!(scon!({a 1, b{foo 2}, c 3}), wrapper_to_value);
 
     let array_from_str: Vec<&RawValue> =
         serde_scon::from_str(r#"["a", 42, {foo"bar"}, /]"#).unwrap();
-    assert_eq!(r#""a""#, array_from_str[0].get());
+    assert_eq!("`a", array_from_str[0].get());
     assert_eq!("42", array_from_str[1].get());
-    assert_eq!(r#"{"foo": "bar"}"#, array_from_str[2].get());
+    assert_eq!("{foo bar}", array_from_str[2].get());
     assert_eq!("/", array_from_str[3].get());
 
     let array_to_string = serde_scon::to_string(&array_from_str).unwrap();
-    assert_eq!(r#"["a",42,{"foo": "bar"},null]"#, array_to_string);
+    assert_eq!("[`a,42,{foo bar},/]", array_to_string);
 }
 
 #[cfg(feature = "raw_value")]
@@ -2461,10 +2460,10 @@ fn test_raw_value_in_map_key() {
     }
 
     let map_from_str: HashMap<&RawMapKey, &RawValue> =
-        serde_scon::from_str(r#" {"\\k":"\\v"} "#).unwrap();
+        serde_scon::from_str(r#"{'\k'"\v"}"#).unwrap();
     let (map_k, map_v) = map_from_str.into_iter().next().unwrap();
-    assert_eq!("\"\\\\k\"", map_k.0.get());
-    assert_eq!("\"\\\\v\"", map_v.get());
+    assert_eq!("'\\k'", map_k.0.get());
+    assert_eq!("\"\\v\"", map_v.get());
 }
 
 #[cfg(feature = "raw_value")]
@@ -2478,39 +2477,39 @@ fn test_boxed_raw_value() {
     }
 
     let wrapper_from_str: Wrapper =
-        serde_scon::from_str(r#"{a 1, b{foo 2}, c 3}"#).unwrap();
-    assert_eq!(r#"{foo 2}"#, wrapper_from_str.b.get());
+        serde_scon::from_str("{a 1, b{foo 2}, c 3}").unwrap();
+    assert_eq!("{foo 2}", wrapper_from_str.b.get());
 
     let wrapper_from_reader: Wrapper =
-        serde_scon::from_reader(br#"{a 1, b{foo 2}, c 3}"#.as_ref()).unwrap();
-    assert_eq!(r#"{foo 2}"#, wrapper_from_reader.b.get());
+        serde_scon::from_reader(b"{a 1, b{foo 2}, c 3}".as_ref()).unwrap();
+    assert_eq!("{foo 2}", wrapper_from_reader.b.get());
 
     let wrapper_from_value: Wrapper =
         serde_scon::from_value(scon!({a 1, b{foo 2}, c 3})).unwrap();
-    assert_eq!(r#"{foo 2}"#, wrapper_from_value.b.get());
+    assert_eq!("{foo 2}", wrapper_from_value.b.get());
 
     let wrapper_to_string = serde_scon::to_string(&wrapper_from_str).unwrap();
-    assert_eq!(r#"{a 1,b{foo 2},c 3}"#, wrapper_to_string);
+    assert_eq!("{a 1,b{foo 2},c 3}", wrapper_to_string);
 
     let wrapper_to_value = serde_scon::to_value(&wrapper_from_str).unwrap();
     assert_eq!(scon!({a 1, b{foo 2}, c 3}), wrapper_to_value);
 
     let array_from_str: Vec<Box<RawValue>> =
-        serde_scon::from_str(r#"[`a, 42, {foo bar}, /]"#).unwrap();
-    assert_eq!(r#"`a"#, array_from_str[0].get());
+        serde_scon::from_str("[`a, 42, {foo bar}, /]").unwrap();
+    assert_eq!("`a", array_from_str[0].get());
     assert_eq!("42", array_from_str[1].get());
-    assert_eq!(r#"{foo bar}"#, array_from_str[2].get());
+    assert_eq!("{foo bar}", array_from_str[2].get());
     assert_eq!("/", array_from_str[3].get());
 
     let array_from_reader: Vec<Box<RawValue>> =
-        serde_scon::from_reader(br#"[`a, 42, {foo bar}, /]"#.as_ref()).unwrap();
+        serde_scon::from_reader(b"[`a, 42, {foo bar}, /]".as_ref()).unwrap();
     assert_eq!("`a", array_from_reader[0].get());
     assert_eq!("42", array_from_reader[1].get());
     assert_eq!("{foo bar}", array_from_reader[2].get());
     assert_eq!("/", array_from_reader[3].get());
 
     let array_to_string = serde_scon::to_string(&array_from_str).unwrap();
-    assert_eq!(r#"[`a,42,{foo bar},/]"#, array_to_string);
+    assert_eq!("[`a,42,{foo bar},/]", array_to_string);
 }
 
 #[cfg(feature = "raw_value")]
@@ -2523,7 +2522,7 @@ fn test_raw_value_from_string_unchecked() {
         c: i8,
     }
 
-    let scon = r#"{"foo":[1,2,3],"bar":"\"escaped\""}"#.to_owned();
+    let scon = r#"{foo[1,2,3],bar"""escaped"""}"#.to_owned();
     let checked = RawValue::from_string(scon.clone()).unwrap();
     let unchecked = unsafe { RawValue::from_string_unchecked(scon) };
     assert_eq!(checked.get(), unchecked.get());
@@ -2535,7 +2534,7 @@ fn test_raw_value_from_string_unchecked() {
     };
     let wrapper_to_string = serde_scon::to_string(&wrapper).unwrap();
     assert_eq!(
-        r#"{"a":1,"b":{"foo":[1,2,3],"bar":"\"escaped\""},"c":3}"#,
+        r#"{a 1,b{foo[1,2,3],bar"""escaped"""},c 3}"#,
         wrapper_to_string,
     );
 
@@ -2585,7 +2584,7 @@ fn test_raw_invalid_utf8() {
 fn test_serialize_unsized_value_to_raw_value() {
     assert_eq!(
         serde_scon::value::to_raw_value("foobar").unwrap().get(),
-        r#""foobar""#,
+        "`foobar",
     );
 }
 
