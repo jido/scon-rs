@@ -28,7 +28,7 @@ mod macros;
 use crate::private_test::NumberTestingExt as _;
 #[cfg(feature = "raw_value")]
 use ref_cast::RefCast;
-use serde::de::{self, IntoDeserializer};
+use serde::de::{self, IgnoredAny, IntoDeserializer};
 use serde::ser::{self, SerializeMap, SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf, Bytes};
@@ -638,7 +638,7 @@ where
         // Make sure we can round trip back to `Value`.
         let scon_value2: Value = from_value(scon_value.clone()).unwrap();
         assert_eq!(scon_value2, scon_value);
-        /*
+        
         // Make sure we can fully ignore.
         let twoline = s.to_owned() + "\n3735928559";
         let mut de = Deserializer::from_str(&twoline);
@@ -652,7 +652,6 @@ where
                 assert!(from_str::<IgnoredAny>(&s[..i]).unwrap_err().is_eof());
             }
         }
-*/
     }
 }
 
@@ -1284,17 +1283,17 @@ fn test_parse_struct() {
     
     test_parse_ok(vec![
         (
-"{
-    inner[]
-}",
+            "{
+              inner[]
+            }",
             Outer { inner: vec![] },
         ),
         (
-"{
-    inner[{
-        a/, b 2, c[`abc,`xyz]
-    }]
-}",
+            "{
+              inner[{
+                a/, b 2, c[`abc,`xyz],
+              }],
+            }",
             Outer {
                 inner: vec![Inner {
                     a: (),
@@ -1306,12 +1305,12 @@ fn test_parse_struct() {
     ]);
 
     let v: Outer = from_str("[
- [
-  [
-   /, 2, [ `abc, `xyz, ]
-  ]
- ]
-]",
+           [
+             [
+               /, 2, [ `abc, `xyz, ]
+             ]
+           ]
+        ]",
     )
     .unwrap();
 

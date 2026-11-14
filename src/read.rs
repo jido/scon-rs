@@ -1,5 +1,6 @@
 use crate::error::{Error, ErrorCode, Result};
 use alloc::vec::Vec;
+use alloc::vec;
 use core::cmp;
 use core::ops::Deref;
 use core::str;
@@ -23,7 +24,7 @@ use serde::de::Visitor;
 /// stable we can use actual specialization.
 ///
 /// This trait is sealed and cannot be implemented for types outside of
-/// `serde_json`.
+/// `serde_scon`.
 pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn next(&mut self) -> Result<Option<u8>>;
@@ -69,7 +70,7 @@ pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>>;
 
-    /// Assumes the previous byte was a single quote. Parses a JSON-escaped
+    /// Assumes the previous byte was a single quote. Parses a Scon-escaped
     /// string until the next single quote using the given scratch space if
     /// necessary. The scratch space is initially empty.
     #[doc(hidden)]
@@ -81,7 +82,7 @@ pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>>;
 
-    /// Assumes the previous byte was a quotation mark. Parses a JSON-escaped
+    /// Assumes the previous byte was a quotation mark. Parses a Scon-escaped
     /// string until the next quotation mark using the given scratch space if
     /// necessary. The scratch space is initially empty.
     ///
@@ -93,7 +94,7 @@ pub trait Read<'de>: private::Sealed {
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'de, 's, [u8]>>;
 
-    /// Assumes the previous byte was a quotation mark. Parses a JSON-escaped
+    /// Assumes the previous byte was a quotation mark. Parses a Scon-escaped
     /// string until the next quotation mark but discards the data.
     #[doc(hidden)]
     fn ignore_str(&mut self) -> Result<()>;
@@ -102,6 +103,10 @@ pub trait Read<'de>: private::Sealed {
     /// string until the next single quote but discards the data.
     #[doc(hidden)]
     fn ignore_key(&mut self) -> Result<()>;
+
+    /// Parses a bare Scon map key but discards the data.
+    #[doc(hidden)]
+    fn ignore_bare_key(&mut self) -> Result<()>;
 
     /// Switch raw buffering mode on.
     ///
@@ -158,7 +163,7 @@ where
     }
 }
 
-/// JSON input source that reads from a std::io input stream.
+/// Scon input source that reads from a std::io input stream.
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 pub struct IoRead<R>
@@ -174,7 +179,7 @@ where
     raw_buffering_start_position: Position,
 }
 
-/// JSON input source that reads from a slice of bytes.
+/// Scon input source that reads from a slice of bytes.
 //
 // This is more efficient than other iterators because peek() can be read-only
 // and we can compute line/col position only if an error happens.
@@ -186,7 +191,7 @@ pub struct SliceRead<'a> {
     raw_buffering_start_index: usize,
 }
 
-/// JSON input source that reads from a UTF-8 string.
+/// Scon input source that reads from a UTF-8 string.
 //
 // Able to elide UTF-8 checks by assuming that the input is valid UTF-8.
 pub struct StrRead<'a> {
@@ -207,10 +212,10 @@ impl<R> IoRead<R>
 where
     R: io::Read,
 {
-    /// Create a JSON input source to read from a std::io input stream.
+    /// Create a Scon input source to read from a std::io input stream.
     ///
     /// When reading from a source against which short reads are not efficient, such
-    /// as a [`File`], you will want to apply your own buffering because serde_json
+    /// as a [`File`], you will want to apply your own buffering because serde_scon
     /// will not buffer the input. See [`std::io::BufReader`].
     ///
     /// [`File`]: std::fs::File
@@ -260,21 +265,17 @@ where
         }
     }
 
-    fn parse_bare_str_bytes<'s, T, F>(
-        &'s mut self,
+    fn parse_bare_str_bytes<'s>(
+        &mut self,
         scratch: &'s mut Vec<u8>,
-        result: F,
-    ) -> Result<T>
-    where
-        T: 's,
-        F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
+    ) -> Result<&'s [u8]>
     {
         loop {
             let ch = tri!(next_or_eof(self));
             match ch {
                 b' ' | b'\t' | b'\r' | b'\n' | b']' | b'}' | b',' => {
                     self.ch = Some(ch); // push char back
-                    return result(self, scratch);
+                    return Ok(scratch.as_slice());
                 }
                 0..b' ' | b'\x7F' => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -286,14 +287,10 @@ where
         }
     }
 
-    fn parse_bare_key_bytes<'s, T, F>(
-        &'s mut self,
+    fn parse_bare_key_bytes<'s>(
+        &mut self,
         scratch: &'s mut Vec<u8>,
-        result: F,
-    ) -> Result<T>
-    where
-        T: 's,
-        F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
+    ) -> Result<&'s [u8]>
     {
         loop {
             let ch = tri!(next_or_eof(self));
@@ -304,7 +301,7 @@ where
                 b' ' | b'*' | b'~' | b'/' | b'?' | b'"' | b'^' | //"
                 b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
                     self.ch = Some(ch); // push char back
-                    return result(self, scratch);
+                    return Ok(scratch.as_slice());
                 }
                 0..b' ' | b'\x7F' => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -406,8 +403,9 @@ where
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        self.parse_bare_str_bytes(scratch, as_str)
-            .map(Reference::Copied)
+        let bytes = self.parse_bare_str_bytes(scratch).unwrap();
+        let s = as_str(self, bytes).unwrap();
+        Ok(Reference::Copied(s))
     }
 
     fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
@@ -416,8 +414,9 @@ where
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        self.parse_bare_key_bytes(scratch, as_str)
-            .map(Reference::Copied)
+        let bytes = self.parse_bare_key_bytes(scratch).unwrap();
+        let s = as_str(self, bytes).unwrap();
+        Ok(Reference::Copied(s))
     }
 
     fn parse_str_raw<'s>(
@@ -450,6 +449,11 @@ where
                 }
             }
         }
+    }
+
+    fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.parse_bare_key_bytes(&mut scratch).map(|_| ())
     }
 
     #[cfg(feature = "raw_value")]
@@ -507,7 +511,7 @@ where
 //////////////////////////////////////////////////////////////////////////////
 
 impl<'a> SliceRead<'a> {
-    /// Create a JSON input source to read from a slice of bytes.
+    /// Create a Scon input source to read from a slice of bytes.
     pub fn new(slice: &'a [u8]) -> Self {
         SliceRead {
             slice,
@@ -581,20 +585,17 @@ impl<'a> SliceRead<'a> {
         }
     }
 
-    fn parse_bare_str_bytes<'s, T, F>(
-        &'s mut self,
+    fn parse_bare_str_bytes<'s>(
+        &mut self,
         _scratch: &'s mut Vec<u8>,
-        result: F,
-    ) -> Result<Reference<'a, 's, T>>
-    where
-        T: ?Sized + 's,
-        F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
+    ) -> Result<&'a [u8]>
     {
         // Index of the first byte
         let start = self.index;
+        let slice = self.slice;
 
-        while self.index < self.slice.len() {
-            match self.slice[self.index] {
+        while self.index < slice.len() {
+            match slice[self.index] {
                 0..=b' ' | b'\x7F' | b'}' | b']' | b',' => {
                     break;
                 }
@@ -605,24 +606,20 @@ impl<'a> SliceRead<'a> {
         }
         // Fast path: return a slice of the raw Scon without any
         // copying.
-        let borrowed = &self.slice[start..self.index];
-        return result(self, borrowed).map(Reference::Borrowed);
+        Ok(&slice[start..self.index])
     }
 
-    fn parse_bare_key_bytes<'s, T, F>(
-        &'s mut self,
+    fn parse_bare_key_bytes<'s>(
+        &mut self,
         _scratch: &'s mut Vec<u8>,
-        result: F,
-    ) -> Result<Reference<'a, 's, T>>
-    where
-        T: ?Sized + 's,
-        F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
+    ) -> Result<&'a [u8]>
     {
         // Index of the first byte
         let start = self.index;
+        let slice = self.slice;
 
-        while self.index < self.slice.len() {
-            match self.slice[self.index] {
+        while self.index < slice.len() {
+            match slice[self.index] {
                 0..=b' ' | b'\x7F' | b':' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
                 b'^' | b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
                     break;
@@ -634,8 +631,7 @@ impl<'a> SliceRead<'a> {
         }
         // Fast path: return a slice of the raw Scon without any
         // copying.
-        let borrowed = &self.slice[start..self.index];
-        return result(self, borrowed).map(Reference::Borrowed);
+        Ok(&slice[start..self.index])
     }
 }
 
@@ -690,7 +686,9 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.parse_bare_str_bytes(scratch, as_str)
+        let bytes = self.parse_bare_str_bytes(scratch).unwrap();
+        let s = as_str(self, bytes).unwrap();
+        Ok(Reference::Borrowed(s))
     }
 
     fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
@@ -698,7 +696,9 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.parse_bare_key_bytes(scratch, as_str)
+        let bytes = self.parse_bare_key_bytes(scratch).unwrap();
+        let s = as_str(self, bytes).unwrap();
+        Ok(Reference::Borrowed(s))
     }
 
     fn parse_str_raw<'s>(
@@ -734,6 +734,11 @@ impl<'a> Read<'a> for SliceRead<'a> {
             }
             self.index += 1;
         }
+    }
+
+    fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.parse_bare_key_bytes(&mut scratch).map(|_| ())
     }
 
     #[cfg(feature = "raw_value")]
@@ -776,7 +781,7 @@ impl<'a> Read<'a> for SliceRead<'a> {
 //////////////////////////////////////////////////////////////////////////////
 
 impl<'a> StrRead<'a> {
-    /// Create a JSON input source to read from a UTF-8 string.
+    /// Create a Scon input source to read from a UTF-8 string.
     pub fn new(s: &'a str) -> Self {
         StrRead {
             delegate: SliceRead::new(s.as_bytes()),
@@ -824,10 +829,9 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.delegate.parse_bare_str_bytes(scratch, |_, bytes| {
-            // The deserialization input came in as &str with a UTF-8 guarantee
-            Ok(unsafe { str::from_utf8_unchecked(bytes) })
-        })
+        let bytes = self.delegate.parse_bare_str_bytes(scratch).unwrap();
+        // The deserialization input came in as &str with a UTF-8 guarantee
+        Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(bytes) }))
     }
 
     fn parse_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
@@ -838,10 +842,9 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.delegate.parse_bare_key_bytes(scratch, |_, bytes| {
-            // The deserialization input came in as &str with a UTF-8 guarantee,
-            Ok(unsafe { str::from_utf8_unchecked(bytes) })
-        })
+        let bytes = self.delegate.parse_bare_key_bytes(scratch).unwrap();
+        // The deserialization input came in as &str with a UTF-8 guarantee,
+        Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(bytes) }))
     }
 
     fn parse_str_raw<'s>(
@@ -857,6 +860,11 @@ impl<'a> Read<'a> for StrRead<'a> {
 
     fn ignore_key(&mut self) -> Result<()> {
         self.delegate.ignore_key()
+    }
+
+    fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.delegate.parse_bare_key_bytes(&mut scratch).map(|_| ())
     }
 
     #[cfg(feature = "raw_value")]
@@ -947,6 +955,10 @@ where
         R::ignore_key(self)
     }
 
+    fn ignore_bare_key(&mut self) -> Result<()> {
+        R::ignore_bare_key(self)
+    }
+
     #[cfg(feature = "raw_value")]
     fn begin_raw_buffering(&mut self) {
         R::begin_raw_buffering(self);
@@ -997,9 +1009,7 @@ fn as_str<'de, 's, R: Read<'de>>(read: &R, slice: &'s [u8]) -> Result<&'s str> {
         Ok(s) => Ok(s),
         Err(err) => {
             // Point at the first invalid UTF-8 byte. `read` is positioned at
-            // the closing quote of the string whose content is `slice`. If the
-            // JSON string contained escape sequences, the column position is
-            // approximate.
+            // the closing quote of the string whose content is `slice`.
             let position = read.position();
             Err(Error::syntax(
                 ErrorCode::InvalidUnicodeCodePoint,
