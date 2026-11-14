@@ -100,6 +100,35 @@ impl<'a> Deserializer<read::StrRead<'a>> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Frame {
+    List,
+    Object,
+}
+
+impl Frame {
+    fn close(self) -> u8 {
+        match self {
+            Frame::List => b']',
+            Frame::Object => b'}',
+        }
+    }
+
+    fn expected_comma_or_end(self) -> ErrorCode {
+        match self {
+            Frame::List => ErrorCode::ExpectedListCommaOrEnd,
+            Frame::Object => ErrorCode::ExpectedObjectCommaOrEnd,
+        }
+    }
+        
+    fn expected_more(self) -> ErrorCode {
+        match self {
+            Frame::List => ErrorCode::EofWhileParsingList,
+            Frame::Object => ErrorCode::EofWhileParsingObject,
+        }
+    }
+}
+
 macro_rules! overflow {
     ($a:ident * 10 + $b:ident, $c:expr) => {
         match $c {
@@ -1128,56 +1157,43 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             None => Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
         }
     }
-    /*impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
-        type Error = Error;
 
-        fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-        where
-            K: de::DeserializeSeed<'de>,
-        {
-            fn has_next_key<'de, 'a, R: Read<'de> + 'a>(map: &mut MapAccess<'a, R>) -> Result<bool> {
-                let mut peek = tri!(map.de.parse_line_whitespace());
-            
-                peek = match peek {
-                    Some(b',') => {
-                        if map.first {
-                            return Err(map.de.peek_error(ErrorCode::TrailingComma));
-                        } else {
-                            map.de.eat_char();
-                            tri!(map.de.parse_line_whitespace())
-                        }
-                    }
-                    Some(b'\n') => tri!(map.de.parse_whitespace()),  // eat whitespace including '\n'
-                    Some(b'}') => peek,
-                    Some(_) => {
-                        if map.first {
-                            peek
-                        } else {
-                            return Err(map.de.peek_error(ErrorCode::ExpectedObjectCommaOrEnd));
-                        }
-                    }
-                    None => {
-                        return Err(map.de.peek_error(ErrorCode::EofWhileParsingObject));
-                    }
-                };
-                map.first = false;
-
-                match peek {
-                    Some(b',') | Some(b'\n') => Err(map.de.peek_error(ErrorCode::TrailingComma)),
-                    Some(b'}') => Ok(false),
-                    Some(_) => Ok(true),
-                    None => Err(map.de.peek_error(ErrorCode::EofWhileParsingObject)),
+    fn has_next_entry(&mut self, first: &mut bool, frame: Frame) -> Result<bool> {
+        let mut peek = tri!(self.parse_line_whitespace());
+    
+        peek = match peek {
+            Some(b',') => {
+                if *first {
+                    return Err(self.peek_error(ErrorCode::TrailingComma));
+                } else {
+                    self.eat_char();
+                    tri!(self.parse_line_whitespace())
                 }
             }
-
-            if tri!(has_next_key(self)) {
-                Ok(Some(tri!(seed.deserialize(MapKey { de: &mut *self.de }))))
-            } else {
-                Ok(None)
+            Some(b'\n') => tri!(self.parse_whitespace()),  // eat whitespace including '\n'
+            Some(c) if c == frame.close() => peek,
+            Some(_) => {
+                if *first {
+                    peek
+                } else {
+                    return Err(self.peek_error(frame.expected_comma_or_end()));
+                }
             }
-        }
+            None => {
+                return Err(self.peek_error(frame.expected_more()));
+            }
+        };
+        *first = false;
 
-        fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+        match peek {
+            Some(b',') | Some(b'\n') => Err(self.peek_error(ErrorCode::TrailingComma)),
+            Some(c) if c == frame.close() => Ok(false),
+            Some(_) => Ok(true),
+            None => Err(self.peek_error(frame.expected_more())),
+        }
+    }
+
+    /*    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
         where
             V: de::DeserializeSeed<'de>,
         {
@@ -2072,42 +2088,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::SeqAccess<'de> for SeqAccess<'a, R> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        fn has_next_element<'de, 'a, R: Read<'de> + 'a>(seq: &mut SeqAccess<'a, R>) -> Result<bool> {
-            let mut peek = tri!(seq.de.parse_line_whitespace());
-            
-            peek = match peek {
-                Some(b',') => {
-                    if seq.first {
-                        return Err(seq.de.peek_error(ErrorCode::TrailingComma));
-                    } else {
-                        seq.de.eat_char();
-                        tri!(seq.de.parse_line_whitespace())
-                    }
-                }
-                Some(b'\n') => tri!(seq.de.parse_whitespace()),  // eat whitespace including '\n'
-                Some(b']') => peek,
-                Some(_) => {
-                    if seq.first {
-                        peek
-                    } else {
-                        return Err(seq.de.peek_error(ErrorCode::ExpectedListCommaOrEnd));
-                    }
-                }
-                None => {
-                    return Err(seq.de.peek_error(ErrorCode::EofWhileParsingList));
-                }
-            };
-            seq.first = false;
-
-            match peek {
-                Some(b',') | Some(b'\n') => Err(seq.de.peek_error(ErrorCode::TrailingComma)),
-                Some(b']') => Ok(false),
-                Some(_) => Ok(true),
-                None => Err(seq.de.peek_error(ErrorCode::EofWhileParsingList)),
-            }
-        }
-
-        if tri!(has_next_element(self)) {
+        if tri!(self.de.has_next_entry(&mut self.first, Frame::List)) {
             Ok(Some(tri!(seed.deserialize(&mut *self.de))))
         } else {
             Ok(None)
@@ -2133,42 +2114,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        fn has_next_key<'de, 'a, R: Read<'de> + 'a>(map: &mut MapAccess<'a, R>) -> Result<bool> {
-            let mut peek = tri!(map.de.parse_line_whitespace());
-            
-            peek = match peek {
-                Some(b',') => {
-                    if map.first {
-                        return Err(map.de.peek_error(ErrorCode::TrailingComma));
-                    } else {
-                        map.de.eat_char();
-                        tri!(map.de.parse_line_whitespace())
-                    }
-                }
-                Some(b'\n') => tri!(map.de.parse_whitespace()),  // eat whitespace including '\n'
-                Some(b'}') => peek,
-                Some(_) => {
-                    if map.first {
-                        peek
-                    } else {
-                        return Err(map.de.peek_error(ErrorCode::ExpectedObjectCommaOrEnd));
-                    }
-                }
-                None => {
-                    return Err(map.de.peek_error(ErrorCode::EofWhileParsingObject));
-                }
-            };
-            map.first = false;
-
-            match peek {
-                Some(b',') | Some(b'\n') => Err(map.de.peek_error(ErrorCode::TrailingComma)),
-                Some(b'}') => Ok(false),
-                Some(_) => Ok(true),
-                None => Err(map.de.peek_error(ErrorCode::EofWhileParsingObject)),
-            }
-        }
-
-        if tri!(has_next_key(self)) {
+        if tri!(self.de.has_next_entry(&mut self.first, Frame::Object)) {
             Ok(Some(tri!(seed.deserialize(MapKey { de: &mut *self.de }))))
         } else {
             Ok(None)
