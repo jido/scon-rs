@@ -193,7 +193,7 @@ impl From<Error> for io::Error {
     ///
     /// enum MyError {
     ///     Io(io::Error),
-    ///     Json(serde_scon::Error),
+    ///     Scon(serde_scon::Error),
     /// }
     ///
     /// impl From<serde_scon::Error> for MyError {
@@ -204,7 +204,7 @@ impl From<Error> for io::Error {
     ///                 MyError::Io(err.into())
     ///             }
     ///             Category::Syntax | Category::Data | Category::Eof => {
-    ///                 MyError::Json(err)
+    ///                 MyError::Scon(err)
     ///             }
     ///         }
     ///     }
@@ -418,7 +418,7 @@ impl de::Error for Error {
     fn invalid_type(unexp: de::Unexpected, exp: &dyn de::Expected) -> Self {
         Error::custom(format_args!(
             "invalid type: {}, expected {}",
-            JsonUnexpected(unexp),
+            SconUnexpected(unexp),
             exp,
         ))
     }
@@ -427,7 +427,7 @@ impl de::Error for Error {
     fn invalid_value(unexp: de::Unexpected, exp: &dyn de::Expected) -> Self {
         Error::custom(format_args!(
             "invalid value: {}, expected {}",
-            JsonUnexpected(unexp),
+            SconUnexpected(unexp),
             exp,
         ))
     }
@@ -440,9 +440,9 @@ impl ser::Error for Error {
     }
 }
 
-struct JsonUnexpected<'a>(de::Unexpected<'a>);
+struct SconUnexpected<'a>(de::Unexpected<'a>);
 
-impl<'a> Display for JsonUnexpected<'a> {
+impl<'a> Display for SconUnexpected<'a> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             de::Unexpected::Unit => formatter.write_str("null"),

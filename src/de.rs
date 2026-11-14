@@ -106,7 +106,26 @@ enum Frame {
     Object,
 }
 
+impl TryFrom<u8> for Frame {
+    type Error = ();
+    
+    fn try_from(c: u8) -> result::Result<Self, Self::Error> {
+        match c {
+            b'[' => Ok(Frame::List),
+            b'{' => Ok(Frame::Object),
+            _ => Err(()),
+        }
+    }
+}
+
 impl Frame {
+    fn open(self) -> u8 {
+        match self {
+            Frame::List => b'[',
+            Frame::Object => b'{',
+        }
+    }
+
     fn close(self) -> u8 {
         match self {
             Frame::List => b']',
@@ -1136,25 +1155,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         Ok(())
     }
 
-    fn end_seq(&mut self) -> Result<()> {
+    fn end_frame(&mut self, frame: Frame) -> Result<()> {
         match tri!(self.parse_whitespace()) {
-            Some(b']') => {
+            Some(c) if c == frame.close() => {
                 self.eat_char();
                 Ok(())
             }
             Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
-            None => Err(self.peek_error(ErrorCode::EofWhileParsingList)),
-        }
-    }
-
-    fn end_map(&mut self) -> Result<()> {
-        match tri!(self.parse_whitespace()) {
-            Some(b'}') => {
-                self.eat_char();
-                Ok(())
-            }
-            Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
-            None => Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
+            None => Err(self.peek_error(frame.expected_more())),
         }
     }
 
@@ -1226,7 +1234,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
 
     fn ignore_value(&mut self) -> Result<()> {
         self.scratch.clear();
-        let mut enclosing = None;
+        let mut enclosing: Option<Frame> = None;
 
         loop {
             let peek = match tri!(self.peek()) {    // no whitespace
@@ -1272,20 +1280,23 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                     tri!(self.read.ignore_str());
                     None
                 }
-                frame @ (b'[' | b'{') => {
-                    self.scratch.extend(enclosing.take());
+                c @ (b'[' | b'{') => {
+                    match enclosing {
+                        Some(o) => self.scratch.push(o.open()),
+                        None => {}
+                    }
                     self.eat_char();
-                    Some(frame)
+                    Some(Frame::try_from(c).unwrap())
                 }
                 _ => return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
             };
 
             let (mut accept_comma, mut frame) = match frame {
-                Some(frame) => (false, frame),
-                None => match enclosing.take() {
-                    Some(frame) => (true, frame),
+                Some(f) => (false, f),
+                None => match enclosing {
+                    Some(o) => (true, o),
                     None => match self.scratch.pop() {
-                        Some(frame) => (true, frame),
+                        Some(c) => (true, Frame::try_from(c).unwrap()),
                         None => return Ok(()),
                     }
                 }
@@ -1297,37 +1308,28 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                         self.eat_char();
                         break;  // go to 2:
                     }
-                    Some(b']') if frame == b'[' => {} // go to 1:
-                    Some(b'}') if frame == b'{' => {}
+                    Some(c) if c == frame.close() => {} // go to 1:
                     Some(_) => {
                         if accept_comma {
-                            return Err(self.peek_error(match frame {
-                                b'[' => ErrorCode::ExpectedListCommaOrEnd,
-                                b'{' => ErrorCode::ExpectedObjectCommaOrEnd,
-                                _ => unreachable!(),
-                            }));
+                            return Err(self.peek_error(frame.expected_comma_or_end()));
                         } else {
                             break;
                         }
                     }
                     None => {
-                        return Err(self.peek_error(match frame {
-                            b'[' => ErrorCode::EofWhileParsingList,
-                            b'{' => ErrorCode::EofWhileParsingObject,
-                            _ => unreachable!(),
-                        }));
+                        return Err(self.peek_error(frame.expected_more()));
                     }
                 }
                 // 1:
                 self.eat_char();    // close frame
                 frame = match self.scratch.pop() {
-                    Some(outer) => outer,
+                    Some(outer) => Frame::try_from(outer).unwrap(),
                     None => return Ok(()),
                 };
                 accept_comma = true;    // still inside a frame
             }
             // 2:
-            if frame == b'{' {
+            if frame == Frame::Object {
                 match tri!(self.parse_whitespace()) {
                     Some(b'\'') => {
                         self.eat_char();
@@ -1586,7 +1588,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_seq(SeqAccess::new(self));
                 }
 
-                match (ret, self.end_seq()) {
+                match (ret, self.end_frame(Frame::List)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
@@ -1597,7 +1599,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_map(MapAccess::new(self));
                 }
 
-                match (ret, self.end_map()) {
+                match (ret, self.end_frame(Frame::Object)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
@@ -1894,7 +1896,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_seq(SeqAccess::new(self));
                 }
 
-                match (ret, self.end_seq()) {
+                match (ret, self.end_frame(Frame::List)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
@@ -1946,7 +1948,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_map(MapAccess::new(self));
                 }
 
-                match (ret, self.end_map()) {
+                match (ret, self.end_frame(Frame::Object)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
@@ -1984,7 +1986,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_seq(SeqAccess::new(self));
                 }
 
-                match (ret, self.end_seq()) {
+                match (ret, self.end_frame(Frame::List)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
@@ -1995,7 +1997,7 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
                     let ret = visitor.visit_map(MapAccess::new(self));
                 }
 
-                match (ret, self.end_map()) {
+                match (ret, self.end_frame(Frame::Object)) {
                     (Ok(ret), Ok(())) => Ok(ret),
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
