@@ -1201,40 +1201,26 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
     }
 
-    /*    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-        where
-            V: de::DeserializeSeed<'de>,
-        {
-            self.de.after_key = true;
-            match self.de.peek() {
-                Ok(Some(b' ')) => {
-                    // Space before a number or bare string
-                    self.de.eat_char();
-                    match self.de.peek() {
-                        Ok(Some(b'-' | b'+' | b'0'..=b'9')) => {
-                            seed.deserialize(&mut *self.de)
-                        }
-                        Ok(Some(b'.' | b'*' | b'~' | b'/' | b'?' | b'"' | b'`' | //"
-                        b'^' | b'<' | b'{' | b'[' | b' ' | b'\t' | b'\r' | b'\n')) => {
-                            Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
-                        }
-                        Ok(Some(_)) => {
-                            seed.deserialize(&mut *self.de)
-                        }
-                        _ => {
-                            Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
-                        }
-                    }
-                },
-                Ok(_) => seed.deserialize(&mut *self.de),
-                Err(_) => Err(self.de.peek_error(ErrorCode::ExpectedSomeValue)),
-            }
-        }
-    }*/
-
     fn ignore_value(&mut self) -> Result<()> {
         self.scratch.clear();
         let mut enclosing: Option<Frame> = None;
+
+        #[derive(PartialEq)]
+        enum MapState {
+            Other,
+            BeforeKey,
+            AfterKey,
+            IsBare,
+        }
+        let mut state = MapState::Other;
+        let mut first = false;
+
+        if self.after_key {
+            self.after_key = false;
+            state = MapState::AfterKey;
+        } else {
+            tri!(self.parse_whitespace());
+        }
 
         loop {
             let peek = match tri!(self.peek()) {    // no whitespace
@@ -1244,110 +1230,112 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 }
             };
 
-            let frame = match peek {
-                b'/' => {
+            match peek {
+                b' ' if state == MapState::AfterKey => {
                     self.eat_char();
-                    None
+                    state = MapState::IsBare;
+                    continue;
                 }
-                b'*' => {
+                b'/' | b'*' | b'~' | b'?' => {
                     self.eat_char();
-                    None
-                }
-                b'~' => {
-                    self.eat_char();
-                    None
-                }
-                b'?' => {
-                    self.eat_char();
-                    None
-                }
-                b'-' => {
-                    self.eat_char();
-                    tri!(self.ignore_integer());
-                    None
-                }
-                b'+' => {
-                    self.eat_char();
-                    tri!(self.ignore_integer());
-                    None
-                }
-                b'0'..=b'9' => {
-                    tri!(self.ignore_integer());
-                    None
+                    if state == MapState::IsBare {
+                        return Err(self.peek_error(ErrorCode::InvalidNumber));
+                    } else if state == MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString));
+                    }
                 }
                 b'"' => { //"
                     self.eat_char();
                     tri!(self.read.ignore_str());
-                    None
+                    if state == MapState::IsBare {
+                        return Err(self.peek_error(ErrorCode::InvalidNumber));
+                    } else if state == MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString));
+                    }
                 }
                 c @ (b'[' | b'{') => {
+                    if state == MapState::IsBare {
+                        return Err(self.peek_error(ErrorCode::InvalidNumber));
+                    } else if state == MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString));
+                    }
                     match enclosing {
-                        Some(o) => self.scratch.push(o.open()),
+                        Some(o) => self.scratch.push(o.open()), // stash current frame
                         None => {}
                     }
                     self.eat_char();
-                    Some(Frame::try_from(c).unwrap())
+                    enclosing = Some(Frame::try_from(c).unwrap());
+                    first = true;
                 }
-                _ => return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
-            };
-
-            let (mut accept_comma, mut frame) = match frame {
-                Some(f) => (false, f),
-                None => match enclosing {
-                    Some(o) => (true, o),
-                    None => match self.scratch.pop() {
-                        Some(c) => (true, Frame::try_from(c).unwrap()),
-                        None => return Ok(()),
+                b'-' | b'+' => {
+                    self.eat_char();
+                    tri!(self.ignore_integer());
+                    if state == MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString));
                     }
                 }
-            };
+                b'0'..=b'9' => {
+                    tri!(self.ignore_integer());
+                    if state == MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString));
+                    }
+                }
+                b'\'' => {
+                    self.eat_char();
+                    tri!(self.read.ignore_key());
+                    if state != MapState::BeforeKey {
+                        return Err(self.peek_error(ErrorCode::ExpectedSomeValue));
+                    }
+                    state = MapState::AfterKey;
+                    continue;
+                }
+                b'`' => match state {
+                    MapState::Other => {
+                        self.eat_char();
+                        tri!(self.read.ignore_bare_key());  // ignore_bare_str()
+                    }
+                    MapState::IsBare =>
+                        return Err(self.peek_error(ErrorCode::InvalidNumber)),
+                    MapState::BeforeKey =>
+                        return Err(self.peek_error(ErrorCode::KeyMustBeAString)),
+                    MapState::AfterKey =>
+                        return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+                }
+                _ => match state {
+                    MapState::IsBare =>
+                        tri!(self.read.ignore_bare_key()), // ignore_bare_str()
+                    MapState::BeforeKey => {
+                        tri!(self.read.ignore_bare_key());
+                        state = MapState::AfterKey;
+                        continue;
+                    }
+                    _ =>
+                        return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+                }
+            }
 
             loop {
-                match tri!(self.parse_whitespace()) {
-                    Some(b',') if accept_comma => {
-                        self.eat_char();
-                        break;  // go to 2:
+                let frame = match enclosing {
+                    Some(f) => f,
+                    None => match self.scratch.pop() {
+                        Some(c) => Frame::try_from(c).unwrap(), // continue stashed frame
+                        None => return Ok(()),  // no new, enclosing or stashed frame: return
                     }
-                    Some(c) if c == frame.close() => {} // go to 1:
-                    Some(_) => {
-                        if accept_comma {
-                            return Err(self.peek_error(frame.expected_comma_or_end()));
-                        } else {
-                            break;
-                        }
-                    }
-                    None => {
-                        return Err(self.peek_error(frame.expected_more()));
-                    }
-                }
-                // 1:
-                self.eat_char();    // close frame
-                frame = match self.scratch.pop() {
-                    Some(outer) => Frame::try_from(outer).unwrap(),
-                    None => return Ok(()),
                 };
-                accept_comma = true;    // still inside a frame
-            }
-            // 2:
-            if frame == Frame::Object {
-                match tri!(self.parse_whitespace()) {
-                    Some(b'\'') => {
-                        self.eat_char();
-                        tri!(self.read.ignore_key());
-                    }
-                    Some(b'+' | b'-' | b'0'..=b'9' | b'.' | b'*' | b'~' | b'/' | b'?' | b',' | b'{' | b'[' | b'"') => //"
-                        return Err(self.peek_error(ErrorCode::KeyMustBeAString)),
-                    Some(_) => tri!(self.read.ignore_bare_key()),
-                    None => return Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
-                }
-                
-                match tri!(self.peek()) {
-                    Some(b' ') => self.eat_char(),  // consume space before number value
-                    _ => {}
-                }
-            }
 
-            enclosing = Some(frame);
+                if tri!(self.has_next_entry(&mut first, frame)) {
+                    state = if frame == Frame::Object {
+                        MapState::BeforeKey
+                    } else {
+                        MapState::Other
+                    };
+                    enclosing = Some(frame);
+                    break;
+                } else {
+                    self.eat_char();
+                }
+                enclosing = None;
+            }
         }
     }
 
@@ -2066,7 +2054,6 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
-        self.after_key = false;
         tri!(self.ignore_value());
         visitor.visit_unit()
     }

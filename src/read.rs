@@ -403,8 +403,8 @@ where
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        let bytes = self.parse_bare_str_bytes(scratch).unwrap();
-        let s = as_str(self, bytes).unwrap();
+        let bytes = tri!(self.parse_bare_str_bytes(scratch));
+        let s = tri!(as_str(self, bytes));
         Ok(Reference::Copied(s))
     }
 
@@ -414,8 +414,8 @@ where
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        let bytes = self.parse_bare_key_bytes(scratch).unwrap();
-        let s = as_str(self, bytes).unwrap();
+        let bytes = tri!(self.parse_bare_key_bytes(scratch));
+        let s = tri!(as_str(self, bytes));
         Ok(Reference::Copied(s))
     }
 
@@ -686,8 +686,8 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = self.parse_bare_str_bytes(scratch).unwrap();
-        let s = as_str(self, bytes).unwrap();
+        let bytes = tri!(self.parse_bare_str_bytes(scratch));
+        let s = tri!(as_str(self, bytes));
         Ok(Reference::Borrowed(s))
     }
 
@@ -696,8 +696,8 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = self.parse_bare_key_bytes(scratch).unwrap();
-        let s = as_str(self, bytes).unwrap();
+        let bytes = tri!(self.parse_bare_key_bytes(scratch));
+        let s = tri!(as_str(self, bytes));
         Ok(Reference::Borrowed(s))
     }
 
@@ -829,7 +829,7 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_bare_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = self.delegate.parse_bare_str_bytes(scratch).unwrap();
+        let bytes = tri!(self.delegate.parse_bare_str_bytes(scratch));
         // The deserialization input came in as &str with a UTF-8 guarantee
         Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(bytes) }))
     }
@@ -842,7 +842,7 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = self.delegate.parse_bare_key_bytes(scratch).unwrap();
+        let bytes = tri!(self.delegate.parse_bare_key_bytes(scratch));
         // The deserialization input came in as &str with a UTF-8 guarantee,
         Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(bytes) }))
     }
