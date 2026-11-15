@@ -104,6 +104,10 @@ pub trait Read<'de>: private::Sealed {
     #[doc(hidden)]
     fn ignore_key(&mut self) -> Result<()>;
 
+    /// Parses a bare Scon string but discards the data.
+    #[doc(hidden)]
+    fn ignore_bare_str(&mut self) -> Result<()>;
+
     /// Parses a bare Scon map key but discards the data.
     #[doc(hidden)]
     fn ignore_bare_key(&mut self) -> Result<()>;
@@ -451,6 +455,11 @@ where
         }
     }
 
+    fn ignore_bare_str<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.parse_bare_str_bytes(&mut scratch).map(|_| ())
+    }
+
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
         let mut scratch: Vec<u8> = vec![];
         self.parse_bare_key_bytes(&mut scratch).map(|_| ())
@@ -736,6 +745,11 @@ impl<'a> Read<'a> for SliceRead<'a> {
         }
     }
 
+    fn ignore_bare_str<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.parse_bare_str_bytes(&mut scratch).map(|_| ())
+    }
+
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
         let mut scratch: Vec<u8> = vec![];
         self.parse_bare_key_bytes(&mut scratch).map(|_| ())
@@ -862,6 +876,11 @@ impl<'a> Read<'a> for StrRead<'a> {
         self.delegate.ignore_key()
     }
 
+    fn ignore_bare_str<'s>(&'s mut self) -> Result<()> {
+        let mut scratch: Vec<u8> = vec![];
+        self.delegate.parse_bare_str_bytes(&mut scratch).map(|_| ())
+    }
+
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
         let mut scratch: Vec<u8> = vec![];
         self.delegate.parse_bare_key_bytes(&mut scratch).map(|_| ())
@@ -953,6 +972,10 @@ where
 
     fn ignore_key(&mut self) -> Result<()> {
         R::ignore_key(self)
+    }
+
+    fn ignore_bare_str(&mut self) -> Result<()> {
+        R::ignore_bare_str(self)
     }
 
     fn ignore_bare_key(&mut self) -> Result<()> {

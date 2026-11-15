@@ -1292,7 +1292,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 b'`' => match state {
                     MapState::Other => {
                         self.eat_char();
-                        tri!(self.read.ignore_bare_key());  // ignore_bare_str()
+                        tri!(self.read.ignore_bare_str());
                     }
                     MapState::IsBare =>
                         return Err(self.peek_error(ErrorCode::InvalidNumber)),
@@ -1303,7 +1303,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 }
                 _ => match state {
                     MapState::IsBare =>
-                        tri!(self.read.ignore_bare_key()), // ignore_bare_str()
+                        tri!(self.read.ignore_bare_str()),
                     MapState::BeforeKey => {
                         tri!(self.read.ignore_bare_key());
                         state = MapState::AfterKey;
