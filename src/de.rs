@@ -2120,23 +2120,21 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
                 // Space before a number or bare string
                 self.de.eat_char();
                 match self.de.peek() {
-                    Ok(Some(b'-' | b'+' | b'0'..=b'9')) => {
-                        seed.deserialize(&mut *self.de)
-                    }
+                    Ok(Some(b'-' | b'+' | b'0'..=b'9')) =>
+                        seed.deserialize(&mut *self.de),
                     Ok(Some(b'.' | b'*' | b'~' | b'/' | b'?' | b'"' | b'`' | //"
-                    b'^' | b'<' | b'{' | b'[' | b' ' | b'\t' | b'\r' | b'\n')) => {
-                        Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
-                    }
-                    Ok(Some(_)) => {
-                        seed.deserialize(&mut *self.de)
-                    }
-                    _ => {
-                        Err(self.de.peek_error(ErrorCode::ExpectedSomeValue))
-                    }
+                    b'^' | b'<' | b'{' | b'[' | b' ' | b'\t' | b'\r' | b'\n')) =>
+                        Err(self.de.peek_error(ErrorCode::ExpectedSomeValue)),
+                    Ok(Some(_)) =>
+                        seed.deserialize(&mut *self.de),
+                    Ok(None) =>
+                        Err(self.de.peek_error(ErrorCode::EofWhileParsingValue)),
+                    Err(err) =>
+                        Err(err),
                 }
             },
             Ok(_) => seed.deserialize(&mut *self.de),
-            Err(_) => Err(self.de.peek_error(ErrorCode::ExpectedSomeValue)),
+            Err(err) => Err(err),
         }
     }
 }

@@ -294,18 +294,19 @@ where
     fn parse_bare_key_bytes<'s>(
         &mut self,
         scratch: &'s mut Vec<u8>,
-    ) -> Result<&'s [u8]>
+    ) -> Result<bool>
     {
         loop {
             let ch = tri!(next_or_eof(self));
             match ch {
                 b':' => {
-                    scratch.clear();
+                    self.ch = Some(ch);
+                    return Ok(true);
                 }
                 b' ' | b'*' | b'~' | b'/' | b'?' | b'"' | b'^' | //"
                 b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
                     self.ch = Some(ch); // push char back
-                    return Ok(scratch.as_slice());
+                    return Ok(false);
                 }
                 0..b' ' | b'\x7F' => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -418,9 +419,26 @@ where
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        let bytes = tri!(self.parse_bare_key_bytes(scratch));
-        let s = tri!(as_str(self, bytes));
-        Ok(Reference::Copied(s))
+        if tri!(self.parse_bare_key_bytes(scratch)) {
+            // TODO: store shorthand
+            self.discard();
+            scratch.clear();
+            match tri!(self.peek()) {
+                Some(b'\'') => {
+                    self.discard();
+                    return self.parse_key(scratch);
+                }
+                Some(_) => {
+                    tri!(self.parse_bare_key_bytes(scratch));
+                }
+                None => {
+                    return error(self, ErrorCode::EofWhileParsingValue);
+                }
+            }
+        }
+        
+        let s = tri!(as_str(self, scratch.as_slice()));
+        return Ok(Reference::Copied(s));
     }
 
     fn parse_str_raw<'s>(
@@ -462,7 +480,25 @@ where
 
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
         let mut scratch: Vec<u8> = vec![];
-        self.parse_bare_key_bytes(&mut scratch).map(|_| ())
+        if tri!(self.parse_bare_key_bytes(&mut scratch)) {
+            // TODO: store shorthand
+            self.discard();
+            match tri!(self.peek()) {
+                Some(b'\'') => {
+                    self.discard();
+                    self.ignore_key()
+                }
+                Some(_) => {
+                    let _ = tri!(self.parse_bare_key_bytes(&mut scratch));
+                    Ok(())
+                }
+                None => {
+                    error(self, ErrorCode::EofWhileParsingValue)
+                }
+            }
+        } else {
+            Ok(())
+        }
     }
 
     #[cfg(feature = "raw_value")]
@@ -621,15 +657,20 @@ impl<'a> SliceRead<'a> {
     fn parse_bare_key_bytes<'s>(
         &mut self,
         _scratch: &'s mut Vec<u8>,
-    ) -> Result<&'a [u8]>
+    ) -> Result<(&'a [u8], bool)>
     {
         // Index of the first byte
         let start = self.index;
         let slice = self.slice;
+        let mut colon = false;
 
         while self.index < slice.len() {
             match slice[self.index] {
-                0..=b' ' | b'\x7F' | b':' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
+                b':' => {
+                    colon = true;
+                    break;
+                }
+                0..=b' ' | b'\x7F' | b'*' | b'~' | b'/' | b'?' | b'"' | //"
                 b'^' | b'<' | b'[' | b']' | b'{' | b'}' | b',' => {
                     break;
                 }
@@ -640,7 +681,7 @@ impl<'a> SliceRead<'a> {
         }
         // Fast path: return a slice of the raw Scon without any
         // copying.
-        Ok(&slice[start..self.index])
+        Ok((&slice[start..self.index], colon))
     }
 }
 
@@ -705,7 +746,24 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = tri!(self.parse_bare_key_bytes(scratch));
+        let (mut bytes, colon) = tri!(self.parse_bare_key_bytes(scratch));
+        if colon {
+            // TODO: store shorthand
+            self.discard();
+            scratch.clear();
+            match tri!(self.peek()) {
+                Some(b'\'') => {
+                    self.discard();
+                    return self.parse_key(scratch);
+                }
+                Some(_) => {
+                    (bytes,_) = tri!(self.parse_bare_key_bytes(scratch));
+                }
+                None => {
+                    return error(self, ErrorCode::EofWhileParsingValue);
+                }
+            }
+        }
         let s = tri!(as_str(self, bytes));
         Ok(Reference::Borrowed(s))
     }
@@ -752,7 +810,27 @@ impl<'a> Read<'a> for SliceRead<'a> {
 
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
         let mut scratch: Vec<u8> = vec![];
-        self.parse_bare_key_bytes(&mut scratch).map(|_| ())
+        let (_,more) = tri!(self.parse_bare_key_bytes(&mut scratch));
+        if more {
+            // TODO: store shorthand
+            self.discard();
+            scratch.clear();
+            match tri!(self.peek()) {
+                Some(b'\'') => {
+                    self.discard();
+                    self.ignore_key()
+                }
+                Some(_) => {
+                    tri!(self.parse_bare_key_bytes(&mut scratch));
+                    Ok(())
+                }
+                None => {
+                    error(self, ErrorCode::EofWhileParsingValue)
+                }
+            }
+        } else {
+            Ok(())
+        }
     }
 
     #[cfg(feature = "raw_value")]
@@ -856,9 +934,7 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn parse_bare_key<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        let bytes = tri!(self.delegate.parse_bare_key_bytes(scratch));
-        // The deserialization input came in as &str with a UTF-8 guarantee,
-        Ok(Reference::Borrowed(unsafe { str::from_utf8_unchecked(bytes) }))
+        self.delegate.parse_bare_key(scratch)
     }
 
     fn parse_str_raw<'s>(
@@ -882,8 +958,7 @@ impl<'a> Read<'a> for StrRead<'a> {
     }
 
     fn ignore_bare_key<'s>(&'s mut self) -> Result<()> {
-        let mut scratch: Vec<u8> = vec![];
-        self.delegate.parse_bare_key_bytes(&mut scratch).map(|_| ())
+        self.delegate.ignore_bare_key()
     }
 
     #[cfg(feature = "raw_value")]

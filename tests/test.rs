@@ -644,15 +644,21 @@ where
         let mut de = Deserializer::from_str(&twoline);
         IgnoredAny::deserialize(&mut de).unwrap();
         assert_eq!(0xDEAD_BEEF, u64::deserialize(&mut de).unwrap());
-        /*
-        // Make sure every prefix is an EOF error, except that a prefix of a
-        // number may be a valid number.
-        if !scon_value.is_number() {
+        
+        // Make sure every prefix is an EOF error, except that a prefix may
+        // be a valid number or string.
+        let prefix_string = scon_value.is_string() && match s.trim() {
+            bare if bare.chars().next() == Some('`') => true,
+            quoted if quoted.chars().next() == Some('"') && quoted.contains(r#""""#) => true, //"
+            _ => false,
+        };
+        if !scon_value.is_number() && !prefix_string {
             for (i, _) in s.trim_end().char_indices() {
+                //println!("error {:?}", from_str::<Value>(&s[..i]).unwrap_err());
                 assert!(from_str::<Value>(&s[..i]).unwrap_err().is_eof());
                 assert!(from_str::<IgnoredAny>(&s[..i]).unwrap_err().is_eof());
             }
-        }*/
+        }
     }
 }
 
@@ -1223,10 +1229,10 @@ fn test_parse_object() {
         ("{1", "key must be in single quotes or bare at line 1 column 2"),
         ("{ a", "EOF while parsing a value at line 1 column 3"),
         ("{a", "EOF while parsing a value at line 1 column 2"),
-        ("{a ", "expected value at line 1 column 3"),
+        ("{a ", "EOF while parsing a value at line 1 column 3"),
         ("{a  1}", "expected value at line 1 column 4"),
-        ("{a: ", "expected value at line 1 column 3"),
-        ("{a:a", "expected value at line 1 column 3"),
+        ("{a: ", "EOF while parsing a value at line 1 column 4"),
+        ("{a:a", "EOF while parsing a value at line 1 column 4"),
         ("{a 1", "EOF while parsing an object at line 1 column 4"),
         ("{a 1 1", "expected `,` or `}` at line 1 column 6"),
         ("{a 1,", "EOF while parsing an object at line 1 column 5"),
