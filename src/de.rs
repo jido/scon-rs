@@ -6,7 +6,9 @@ use crate::lexical;
 use crate::number::Number;
 use crate::read::{self, Fused, Reference};
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
+use alloc::collections::BTreeMap;
 #[cfg(feature = "float_roundtrip")]
 use core::iter;
 use core::iter::FusedIterator;
@@ -31,6 +33,7 @@ pub use crate::read::IoRead;
 pub struct Deserializer<R> {
     read: R,
     scratch: Vec<u8>,
+    shorthand: BTreeMap<String, String>,
     remaining_depth: u8,
     after_key: bool,
     #[cfg(feature = "float_roundtrip")]
@@ -61,6 +64,7 @@ where
         Deserializer {
             read,
             scratch: Vec::new(),
+            shorthand: BTreeMap::new(),
             remaining_depth: 128,
             after_key: false,
             #[cfg(feature = "float_roundtrip")]
@@ -329,6 +333,25 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             }
         }
     }
+    
+    /// Associate the short name with the full key in the shorthand store,
+    /// giving an error if the shorthand is already defined.
+    fn save_shorthand(&mut self, ab: &str, full_key: &str) -> Result<()> {
+        match self.shorthand.insert(ab.to_string(), full_key.to_string()) {
+            Some(old_key) => {
+                self.shorthand.insert(ab.to_string(), old_key);
+                Err(self.error(ErrorCode::RedefinedShorthand))
+            }
+            None => Ok(()),
+        }
+    }
+    
+    /*fn lookup(&self, ab: &str) -> Option<&String> {
+        match self.shorthand.get(ab) {
+            Some(key) => Some(key),
+            None => Some(ab),
+        }
+    }*/
 
     #[cold]
     fn peek_invalid_type(&mut self, exp: &dyn Expected) -> Error {
@@ -1259,11 +1282,11 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                     } else if state == MapState::BeforeKey {
                         return Err(self.peek_error(ErrorCode::KeyMustBeAString));
                     }
+                    self.eat_char();
                     match enclosing {
                         Some(o) => self.scratch.push(o.open()), // stash current frame
                         None => {}
                     }
-                    self.eat_char();
                     enclosing = Some(Frame::try_from(c).unwrap());
                     first = true;
                 }
@@ -2343,9 +2366,23 @@ where
             }
             _ => {
                 self.de.scratch.clear();
-                match tri!(self.de.read.parse_bare_key(&mut self.de.scratch)) {
-                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
-                    Reference::Copied(s) => visitor.visit_str(s),
+                let (key, shorthand) = tri!(self.de.read.parse_bare_key(&mut self.de.scratch));
+                match shorthand {
+                    Some(ab) => {
+                        let key = key.to_string();
+                        tri!(self.de.save_shorthand(&ab, &key));
+                        visitor.visit_str(&key)
+                    }
+                    None => match key {
+                        Reference::Borrowed(s) => match self.de.shorthand.get(s) {
+                            Some(mapped) => visitor.visit_str(mapped),
+                            None => visitor.visit_borrowed_str(s),
+                        }
+                        Reference::Copied(s) => match self.de.shorthand.get(s) {
+                            Some(mapped) => visitor.visit_str(mapped),
+                            None => visitor.visit_str(s),
+                        }
+                    }
                 }
             }
         }

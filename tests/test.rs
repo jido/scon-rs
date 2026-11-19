@@ -1231,8 +1231,6 @@ fn test_parse_object() {
         ("{a", "EOF while parsing a value at line 1 column 2"),
         ("{a ", "EOF while parsing a value at line 1 column 3"),
         ("{a  1}", "expected value at line 1 column 4"),
-        ("{a: ", "EOF while parsing a value at line 1 column 4"),
-        ("{a:a", "EOF while parsing a value at line 1 column 4"),
         ("{a 1", "EOF while parsing an object at line 1 column 4"),
         ("{a 1 1", "expected `,` or `}` at line 1 column 6"),
         ("{a 1,", "EOF while parsing an object at line 1 column 5"),
@@ -1265,6 +1263,59 @@ fn test_parse_object() {
     )]);
 
     test_parse_ok(vec![("{c/}", treemap!('c' => ()))]);
+}
+
+#[test]
+fn test_parse_shorthand() {
+    test_parse_err::<BTreeMap<String, u32>>(&[
+        ("{a: ", "EOF while parsing a value at line 1 column 4"),
+        //("{a: 1}", "expected a value at line 1 column 5"),
+    ]);
+
+    test_parse_ok(vec![
+        ("{a:wombat 3}", treemap!("wombat".to_owned() => 3u64)),
+        ("{ wombat:a 3 }", treemap!("a".to_owned() => 3)),
+    ]);
+
+    test_parse_ok(vec![
+        (
+            "{a:'wombat'{a 3,b 4}}",
+            treemap!(
+                "wombat".to_owned() => treemap!(
+                    "wombat".to_owned() => 3,
+                    "b".to_owned() => 4,
+                ),
+            ),
+        ),
+        (
+            " { b:'wombat'{a 3 ,  b 4 } ",
+            treemap!(
+                "wombat".to_owned() => treemap!(
+                    "a".to_owned() => 3,
+                    "wombat".to_owned() => 4,
+                ),
+            ),
+        ),
+    ]);
+
+    test_parse_ok(vec![(
+        "{ a:foo{b:bar 3, c:wombat 4}}",
+        treemap!(
+            "foo".to_owned() => treemap!(
+                "bar".to_owned() => 3u64,
+                "wombat".to_owned() => 4,
+            ),
+        ),
+    )]);
+
+    test_parse_ok(vec![("{c:'Gouda cheese'/}", treemap!("Gouda cheese".to_owned() => ()))]);
+    
+    test_parse_ok(vec![("{c:Joy{d:Joy/}}", treemap!("Joy".to_owned() => treemap!("Joy".to_owned() => ())))]);
+    
+    test_parse_err::<BTreeMap<String, u32>>(&[
+        ("{a:wombat 1, a:foo 2}", "shorthand can only be defined once at line 1 column 18"),
+        ("{a:foo 1, a 2, a:foo 3}", "shorthand can only be defined once at line 1 column 20"),
+    ]);
 }
 
 #[test]

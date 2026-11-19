@@ -53,7 +53,8 @@ impl Error {
     /// - `Category::Eof` - unexpected end of the input data
     pub fn classify(&self) -> Category {
         match self.err.code {
-            ErrorCode::Message(_) => Category::Data,
+            ErrorCode::Message(_)
+            | ErrorCode::RedefinedShorthand => Category::Data,
             ErrorCode::Io(_) => Category::Io,
             ErrorCode::EofWhileParsingList
             | ErrorCode::EofWhileParsingObject
@@ -232,6 +233,9 @@ struct ErrorImpl {
 pub(crate) enum ErrorCode {
     /// Catchall for syntax error messages
     Message(Box<str>),
+    
+    /// Shorthand already defined.
+    RedefinedShorthand,
 
     /// Some I/O error occurred while serializing or deserializing.
     Io(io::Error),
@@ -334,6 +338,7 @@ impl Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorCode::Message(msg) => f.write_str(msg),
+            ErrorCode::RedefinedShorthand => f.write_str("shorthand can only be defined once"),
             ErrorCode::Io(err) => Display::fmt(err, f),
             ErrorCode::EofWhileParsingList => f.write_str("EOF while parsing a list"),
             ErrorCode::EofWhileParsingObject => f.write_str("EOF while parsing an object"),
@@ -348,7 +353,7 @@ impl Display for ErrorCode {
             ErrorCode::NumberOutOfRange => f.write_str("number out of range"),
             ErrorCode::InvalidUnicodeCodePoint => f.write_str("invalid unicode code point"),
             ErrorCode::ControlCharacterWhileParsingString => {
-                f.write_str("control character (\\u0000-\\u001F) found while parsing a string")
+                f.write_str("control character (\\u0000-\\u001F or \\u007F) found while parsing a string")
             }
             ErrorCode::KeyMustBeAString => f.write_str("key must be in single quotes or bare"),
             ErrorCode::ExpectedNumericKey => {
