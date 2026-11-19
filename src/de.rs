@@ -104,6 +104,14 @@ impl<'a> Deserializer<read::StrRead<'a>> {
     }
 }
 
+fn lookup<'a>(
+    key: &'a str,
+    dict: &'a BTreeMap<String, String>,
+) -> &'a str {
+    dict.get(key)
+        .map_or(key, |k| k.as_str())
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Frame {
     List,
@@ -346,13 +354,6 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
     }
     
-    /*fn lookup(&self, ab: &str) -> Option<&String> {
-        match self.shorthand.get(ab) {
-            Some(key) => Some(key),
-            None => Some(ab),
-        }
-    }*/
-
     #[cold]
     fn peek_invalid_type(&mut self, exp: &dyn Expected) -> Error {
         let err = match self.peek_or_null().unwrap_or(b'\x00') {
@@ -2369,7 +2370,7 @@ where
                 let (key, shorthand) = tri!(self.de.read.parse_bare_key(&mut self.de.scratch));
                 match shorthand {
                     Some(ab) => {
-                        let key = key.to_string();
+                        let key = key.to_string();  // must take a copy
                         tri!(self.de.save_shorthand(&ab, &key));
                         visitor.visit_str(&key)
                     }
@@ -2378,10 +2379,7 @@ where
                             Some(mapped) => visitor.visit_str(mapped),
                             None => visitor.visit_borrowed_str(s),
                         }
-                        Reference::Copied(s) => match self.de.shorthand.get(s) {
-                            Some(mapped) => visitor.visit_str(mapped),
-                            None => visitor.visit_str(s),
-                        }
+                        Reference::Copied(s) => visitor.visit_str(lookup(s, &self.de.shorthand)),
                     }
                 }
             }
