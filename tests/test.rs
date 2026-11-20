@@ -1268,8 +1268,8 @@ fn test_parse_object() {
 #[test]
 fn test_parse_shorthand() {
     test_parse_err::<BTreeMap<String, u32>>(&[
-        ("{a: ", "EOF while parsing a value at line 1 column 4"),
-        //("{a: 1}", "expected a value at line 1 column 5"),
+        ("{a:", "EOF while parsing a value at line 1 column 3"),
+        ("{a: 1}", "expected value at line 1 column 3"),
     ]);
 
     test_parse_ok(vec![

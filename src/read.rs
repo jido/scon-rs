@@ -655,9 +655,17 @@ impl<'a> SliceRead<'a> {
                 }
             }
         }
-        // Fast path: return a slice of the raw Scon without any
-        // copying.
-        Ok(&slice[start..self.index])
+        if self.index == start {
+            error(self, if self.index == slice.len() {
+                ErrorCode::EofWhileParsingValue
+            } else {
+                ErrorCode::ExpectedSomeValue
+            })
+        } else {
+            // Fast path: return a slice of the raw Scon without any
+            // copying.
+            Ok(&slice[start..self.index])
+        }
     }
 
     fn parse_bare_key_bytes<'s>(
@@ -685,9 +693,13 @@ impl<'a> SliceRead<'a> {
                 }
             }
         }
-        // Fast path: return a slice of the raw Scon without any
-        // copying.
-        Ok((&slice[start..self.index], colon))
+        if self.index == start {
+            error(self, ErrorCode::ExpectedSomeValue)
+        } else {
+            // Fast path: return a slice of the raw Scon without any
+            // copying.
+            Ok((&slice[start..self.index], colon))
+        }
     }
 }
 
